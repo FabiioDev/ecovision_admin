@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Panel{% endblock %} · EcoVision Admin</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+  <script src="/admin/static/admin.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/admin/config">EcoVision <span>Admin</span></a>
+    {% if admin %}
+    <nav>
+      {% set path = request.url.path %}
+      <a href="/admin/config" class="{{ 'active' if path.startswith('/admin/config') }}">Configuración</a>
+      <a href="/admin/users" class="{{ 'active' if path.startswith('/admin/users') }}">Usuarios</a>
+      <a href="/admin/audit" class="{{ 'active' if path.startswith('/admin/audit') }}">Auditoría</a>
+    </nav>
+    <div class="who">
+      <span>{{ admin.username }} <small class="badge">{{ admin.role }}</small></span>
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+        <button class="btn btn-link" type="submit">Cerrar sesión</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="container">
+    {% if flash %}<div class="alert alert-{{ flash.k }}">{{ flash.m }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

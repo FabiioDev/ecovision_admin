@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Nuevo usuario{% endblock %}
+{% block content %}
+<p><a href="/admin/users">← Usuarios</a></p>
+<div class="card narrow">
+  <h1>Nuevo usuario</h1>
+  <p class="muted">Crea una cuenta de correo/contraseña en Firebase Authentication.</p>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/users/new" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+    <label>Correo <input type="email" name="email" value="{{ values.email or '' }}" required></label>
+    <label>Nombre <input name="display_name" value="{{ values.display_name or '' }}" maxlength="100"></label>
+    <label>Contraseña inicial <input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
+    <button class="btn btn-primary" type="submit">Crear usuario</button>
+  </form>
+</div>
+{% endblock %}

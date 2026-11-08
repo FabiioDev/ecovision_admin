@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ user.email or user.uid }}{% endblock %}
+{% block content %}
+{% set can_edit = admin.can('editor') %}
+<p><a href="/admin/users">← Usuarios</a></p>
+<div class="page-head">
+  <h1>{{ user.email or user.uid }}</h1>
+  {% if user.disabled %}<span class="badge badge-off">desactivado</span>{% else %}<span class="badge badge-on">activo</span>{% endif %}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Cuenta</h2>
+    <dl>
+      <dt>UID</dt><dd><code>{{ user.uid }}</code></dd>
+      <dt>Proveedor</dt><dd>{{ user.providers | join(', ') or '—' }}</dd>
+      <dt>Correo verificado</dt><dd>{{ 'sí' if user.email_verified else 'no' }}</dd>
+      <dt>Alta</dt><dd>{{ user.created_at | dt }}</dd>
+      <dt>Último acceso</dt><dd>{{ user.last_sign_in | dt }}</dd>
+      {% if profile.created_by %}<dt>Creado por</dt><dd>{{ profile.created_by }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Datos</h2>
+    <form method="post" action="/admin/users/{{ user.uid }}">
+      <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+      <fieldset {{ 'disabled' if not can_edit }}>
+        <label>Correo <input type="email" name="email" value="{{ user.email or '' }}"></label>
+        <label>Nombre <input name="display_name" value="{{ user.display_name or '' }}" maxlength="100"></label>
+        {% if can_edit %}<button class="btn btn-primary" type="submit">Guardar</button>{% endif %}
+      </fieldset>
+    </form>
+  </section>
+</div>
+
+{% if can_edit %}
+<div class="grid-2">
+  <section class="card">
+    <h2>Contraseña</h2>
+    {% if 'Correo' in user.providers %}
+    <form method="post" action="/admin/users/{{ user.uid }}/password" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+      <label>Nueva contraseña <input type="password" name="password" minlength="{{ min_pw }}" required autocomplete="new-password"></label>
+      <button class="btn" type="submit">Cambiar contraseña</button>
+    </form>
+    {% else %}
+    <p class="muted">La cuenta no usa correo/contraseña (inicia sesión con Google).</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Acceso</h2>
+    <form method="post" action="/admin/users/{{ user.uid }}/toggle"
+          data-confirm="{{ '¿Activar este usuario?' if user.disabled else '¿Desactivar este usuario? Se cerrarán sus sesiones.' }}">
+      <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+      <input type="hidden" name="disable" value="{{ '0' if user.disabled else '1' }}">
+      <button class="btn {{ '' if user.disabled else 'btn-warning' }}" type="submit">
+        {{ 'Activar usuario' if user.disabled else 'Desactivar usuario' }}
+      </button>
+    </form>
+  </section>
+</div>
+{% endif %}
+
+{% if admin.can('superadmin') %}
+<section class="card danger">
+  <h2>Eliminar usuario</h2>
+  <p>Elimina la cuenta de Firebase Authentication y su perfil. No se puede deshacer.</p>
+  <form method="post" action="/admin/users/{{ user.uid }}/delete" data-confirm="¿Eliminar definitivamente este usuario?">
+    <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+    <label>Escribe <code>{{ user.email or user.uid }}</code> para confirmar
+      <input name="confirm_email" required autocomplete="off">
+    </label>
+    <button class="btn btn-danger" type="submit">Eliminar</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

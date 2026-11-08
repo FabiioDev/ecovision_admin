@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Usuarios registrados</h1>
+  {% if admin.can('editor') %}<a class="btn btn-primary" href="/admin/users/new">Nuevo usuario</a>{% endif %}
+</div>
+
+<form method="get" action="/admin/users" class="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Correo exacto o UID">
+  <button class="btn" type="submit">Buscar</button>
+  {% if q %}<a href="/admin/users">Limpiar</a>{% endif %}
+</form>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<div class="card">
+{% if items %}
+  <table>
+    <thead><tr><th>Correo</th><th>Nombre</th><th>Proveedor</th><th>Estado</th><th>Alta</th><th>Último acceso</th></tr></thead>
+    <tbody>
+    {% for u in items %}
+      <tr>
+        <td><a href="/admin/users/{{ u.uid }}">{{ u.email or u.uid }}</a></td>
+        <td>{{ u.display_name or '—' }}</td>
+        <td>{{ u.providers | join(', ') or '—' }}</td>
+        <td>{% if u.disabled %}<span class="badge badge-off">desactivado</span>{% else %}<span class="badge badge-on">activo</span>{% endif %}</td>
+        <td>{{ u.created_at | dt }}</td>
+        <td>{{ u.last_sign_in | dt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="muted">{{ 'Sin resultados.' if q else 'Aún no hay usuarios registrados.' }}</p>
+{% endif %}
+</div>
+
+<div class="pager">
+  {% if not is_first %}<a href="/admin/users">« Primera página</a>{% endif %}
+  {% if next_page %}<a href="/admin/users?page={{ next_page | urlencode }}">Siguiente »</a>{% endif %}
+</div>
+{% endblock %}

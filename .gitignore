@@ -1,0 +1,19 @@
+CLAUDE.md
+
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+*service-account*.json
+*-sa.json
+credentials*.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Modelo (pesado; se respalda fuera de git)
+inference/exported_model/
+exported_model/

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Versión {{ v.version }}{% endblock %}
+{% block content %}
+<p><a href="/admin/config">← Configuración</a></p>
+<div class="card">
+  <h1>Versión {{ v.version }}</h1>
+  <p class="muted">{{ v.created_at | dt }} · {{ v.created_by }} · {{ v.action }}{% if v.note %} · {{ v.note }}{% endif %}</p>
+  <pre>{{ v.config | tojson_pretty }}</pre>
+</div>
+{% endblock %}

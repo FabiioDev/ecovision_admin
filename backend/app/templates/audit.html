@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Auditoría{% endblock %}
+{% block content %}
+<h1>Auditoría</h1>
+<div class="card">
+{% if entries %}
+  <table>
+    <thead><tr><th>Fecha</th><th>Admin</th><th>Acción</th><th>Objetivo</th><th>Detalles</th><th>IP</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td class="nowrap">{{ e.ts | dt }}</td>
+        <td>{{ e.actor }}</td>
+        <td title="{{ e.action }}">{{ e.action_label }}</td>
+        <td><code>{{ e.target }}</code></td>
+        <td>{% if e.details %}<details><summary>ver</summary><pre>{{ e.details | tojson_pretty }}</pre></details>{% endif %}</td>
+        <td><small>{{ e.ip }}</small></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="muted">Sin registros.</p>
+{% endif %}
+</div>
+<div class="pager">
+  {% if not is_first %}<a href="/admin/audit">« Más recientes</a>{% endif %}
+  {% if next_cursor %}<a href="/admin/audit?cursor={{ next_cursor | urlencode }}">Anteriores »</a>{% endif %}
+</div>
+{% endblock %}
