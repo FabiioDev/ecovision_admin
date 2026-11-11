@@ -1,0 +1,273 @@
+openapi: 3.1.0
+info:
+  title: EcoVision API (backend)
+  version: 0.1.0
+  description: |
+    Contrato entre la app Android EcoVision SV y el backend (Cloud Run).
+    Es la fuente de verdad: si la app y el backend discrepan, se corrige aquí y luego ambos lados.
+
+    Estado por fase:
+      - Fase 1 (implementado): health, config pública y config completa.
+      - Demo web (implementada, HTML): `/demo` y `/demo/predict`, controladas por `demo_enabled`.
+      - Fase 3: `/me`; `GET /config` pasa a exigir token (CONFIG_REQUIRE_AUTH=true).
+      - Fase 4: `/predict` como proxy hacia el servicio privado `inference`.
+      - Fase 5: `/images*` (subida con URL firmada).
+
+    Los nombres del esquema de inferencia se conservan en español
+    (`categoria`, `confianza`, `bbox_norm`, `bbox_px`, `detecciones`).
+
+    El panel `/admin/*` y la demo `/demo*` son HTML/JS propios del backend y no forman
+    parte de este contrato.
+servers:
+  - url: https://BACKEND-URL.run.app
+    description: Cloud Run (sustituir por la URL real)
+  - url: http://localhost:8081
+    description: Desarrollo local
+
+tags:
+  - name: app
+    description: Rutas consumidas por la app Android
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [app]
+      summary: Estado del backend
+      description: Sin autenticación. En la Fase 4 también despertará el servicio de inferencia.
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Servicio activo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /api/v1/config/public:
+    get:
+      tags: [app]
+      summary: Config mínima pública (mantenimiento y versión mínima)
+      description: |
+        Sin autenticación. Pensada para consultarse antes del login: permite mostrar el
+        mensaje de mantenimiento o exigir actualización aunque el usuario no tenga sesión.
+      operationId: getPublicConfig
+      security: []
+      responses:
+        "200":
+          description: Config pública
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicConfig" }
+        "503": { $ref: "#/components/responses/ConfigUnavailable" }
+
+  /api/v1/config:
+    get:
+      tags: [app]
+      summary: Config completa de la app (flags y parámetros)
+      description: |
+        Devuelve la config publicada. `config_version` es el número del último cambio
+        publicado desde el panel (contador para auditoría y caché; NO es la versión de la
+        app). Si nunca se publicó nada, devuelve los valores por defecto con `config_version: 0`.
+
+        Caché: la respuesta incluye `ETag: "v<config_version>"`. La app debe guardar la última
+        config válida y enviar `If-None-Match`; si no cambió, recibe `304` sin cuerpo.
+
+        Ante `503`, error de red o timeout (2–3 s), la app usa la última config guardada o,
+        si no hay, sus valores por defecto del código (iguales a los de este esquema).
+
+        Las dependencias entre flags se resuelven en la app:
+        `history_enabled=false` ⇒ `history_save_enabled=false` y `export_enabled=false`;
+        `announcements_enabled=false` ⇒ no se muestra ningún anuncio.
+
+        Autenticación: opcional en la Fase 1; obligatoria (Bearer) desde la Fase 3.
+      operationId: getConfig
+      security:
+        - {}
+        - firebaseBearer: []
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema: { type: string, example: '"v12"' }
+      responses:
+        "200":
+          description: Config publicada
+          headers:
+            ETag:
+              schema: { type: string, example: '"v12"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigResponse" }
+        "304":
+          description: Sin cambios desde la versión indicada en If-None-Match
+          headers:
+            ETag:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ConfigUnavailable" }
+
+components:
+  securitySchemes:
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: "`Authorization: Bearer <idToken>` emitido por Firebase Authentication."
+
+  responses:
+    Unauthorized:
+      description: Falta el token, es inválido, expiró o fue revocado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Usuario desactivado desde el panel
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ConfigUnavailable:
+      description: No se pudo leer la config (Firestore no disponible y sin copia en memoria)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail: { type: string }
+
+    Health:
+      type: object
+      required: [status, service, version]
+      properties:
+        status: { type: string, example: ok }
+        service: { type: string, example: backend }
+        version: { type: string, example: 0.1.0 }
+
+    PublicConfig:
+      type: object
+      required: [config_version, maintenance_mode, maintenance_message, min_app_version]
+      properties:
+        config_version: { type: integer, minimum: 0 }
+        maintenance_mode: { type: boolean }
+        maintenance_message: { type: string }
+        min_app_version: { type: string }
+
+    ConfigResponse:
+      type: object
+      required: [config_version, updated_at, config]
+      properties:
+        config_version:
+          type: integer
+          minimum: 0
+          description: Número del último cambio publicado (0 = valores por defecto). No es la versión de la app.
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+        config: { $ref: "#/components/schemas/AppConfig" }
+
+    AppConfig:
+      type: object
+      additionalProperties: false
+      description: |
+        Config v1. Con los valores por defecto la app funciona completa.
+        Definición en el backend: backend/app/flags/catalog.py (deben coincidir).
+        La app debe ignorar claves desconocidas y usar su valor por defecto para las ausentes.
+      properties:
+        camera_enabled: { type: boolean, default: true }
+        gallery_enabled: { type: boolean, default: true }
+        history_enabled: { type: boolean, default: true }
+        history_save_enabled: { type: boolean, default: true, description: "Ignorada si history_enabled=false" }
+        export_enabled: { type: boolean, default: true, description: "Ignorada si history_enabled=false" }
+        save_to_gallery_enabled: { type: boolean, default: true }
+        about_enabled: { type: boolean, default: true }
+        tips_enabled: { type: boolean, default: true }
+        show_api_status: { type: boolean, default: true }
+        cloud_sync_enabled:
+          type: boolean
+          default: false
+          description: "Sin efecto todavía (Fase 5): no hay sincronización implementada. Oculta en el panel."
+        announcements_enabled:
+          type: boolean
+          default: false
+          description: Muestra la sección de anuncios. false = no se muestra ninguno.
+        announcement_1: &announcement
+          type: string
+          maxLength: 500
+          default: ""
+          description: |
+            Texto plano de un bloque de anuncio (noticias, enlaces a formularios, etc.).
+            La app le da formato y convierte las URL en enlaces. Vacío = el bloque no se muestra.
+        announcement_2: *announcement
+        announcement_3: *announcement
+        registration_enabled:
+          type: boolean
+          default: true
+          description: "Efecto desde la Fase 3 (el login será obligatorio; no hay modo invitado)"
+        maintenance_mode: { type: boolean, default: false }
+        maintenance_message:
+          type: string
+          maxLength: 500
+          default: Estamos realizando tareas de mantenimiento. Vuelve a intentarlo más tarde.
+        min_app_version:
+          type: string
+          pattern: '^\d+(\.\d+){0,3}$'
+          default: "1.0"
+          description: versionName mínima admitida
+        score_threshold:
+          type: number
+          minimum: 0.3
+          maximum: 1
+          default: 0.3
+          description: Se envía a /predict como ?umbral=
+        nms_enabled: { type: boolean, default: true }
+        nms_iou:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.3
+          description: |
+            Se elimina una detección si su IoU con otra de mayor confianza es
+            ESTRICTAMENTE MAYOR que este valor (misma regla en la app y en la demo).
+            0 = elimina cualquier solapamiento; 1 = no elimina ninguna.
+        max_detections: { type: integer, minimum: 3, maximum: 100, default: 100 }
+        request_timeout_s: { type: integer, minimum: 5, maximum: 120, default: 60 }
+        retries: { type: integer, minimum: 0, maximum: 5, default: 0 }
+        demo_enabled: { type: boolean, default: false, description: "Demo web pública /demo (el backend la bloquea si es false)" }
+
+    # --- Esquema de respuesta de inferencia (servicio `inference`, POST /predict).
+    # Se reutilizará tal cual en POST /api/v1/predict (Fase 4).
+    Deteccion:
+      type: object
+      required: [categoria, clase_id, confianza, bbox_norm, bbox_px]
+      properties:
+        categoria: { type: string, example: Metal }
+        clase_id: { type: integer, example: 4 }
+        confianza: { type: number, example: 0.9843 }
+        bbox_norm:
+          type: array
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+          description: "[xmin, ymin, xmax, ymax] normalizado 0–1"
+        bbox_px:
+          type: array
+          items: { type: integer }
+          minItems: 4
+          maxItems: 4
+          description: "[xmin, ymin, xmax, ymax] en píxeles de la imagen recibida"
+
+    Prediccion:
+      type: object
+      required: [ancho, alto, umbral, latencia_ms, detecciones]
+      properties:
+        ancho: { type: integer, example: 640 }
+        alto: { type: integer, example: 640 }
+        umbral: { type: number, example: 0.3 }
+        latencia_ms: { type: number, example: 1200.5 }
+        detecciones:
+          type: array
+          items: { $ref: "#/components/schemas/Deteccion" }
