@@ -3,9 +3,10 @@
   app_config/current                    {config, version, schema, updated_at, updated_by}
   app_config/current/versions/{000042}  {config, version, schema, created_at, created_by, action, note}
 
-Cada escritura (guardar, restablecer, volver a una versión) crea una versión
-nueva; nunca se reescribe el historial. Si `current` no existe se sirven los
-valores por defecto como versión 0, sin escribir nada.
+Cada escritura (guardar, restablecer, restaurar) crea una entrada nueva en el
+historial; nunca se reescribe. El número de "versión" es solo un contador de cambios
+de la config (auditoría y ETag), no tiene relación con la versión de la app.
+Si `current` no existe se sirven los valores por defecto como versión 0, sin escribir nada.
 """
 
 import threading
@@ -134,7 +135,7 @@ def rollback(version: int, actor: str) -> Optional[tuple[ConfigSnapshot, AppConf
     if data is None:
         return None
     cfg = AppConfig.from_stored(data.get("config"))
-    return save(cfg, actor, "config.rollback", f"Restaurada desde la versión {version}")
+    return save(cfg, actor, "config.rollback", f"Restaurada desde el cambio #{version}")
 
 
 def list_versions(limit: int = 20) -> list[dict]:

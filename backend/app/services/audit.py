@@ -20,7 +20,7 @@ ACTION_LABELS = {
     "admin.password": "Contraseña de admin cambiada",
     "config.update": "Config actualizada",
     "config.reset": "Config restablecida a valores por defecto",
-    "config.rollback": "Config restaurada a versión anterior",
+    "config.rollback": "Config restaurada desde un cambio anterior",
     "user.create": "Usuario creado",
     "user.update": "Usuario editado",
     "user.password": "Contraseña de usuario cambiada",

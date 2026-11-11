@@ -2,7 +2,7 @@
 
 Este módulo es la ÚNICA definición en el backend de:
   - qué claves existen, su tipo y sus límites (modelo Pydantic `AppConfig`);
-  - sus valores por defecto, que reproducen el comportamiento actual de la app
+  - sus valores por defecto, con los que la app funciona completa
     (botón "Restablecer valores por defecto" del panel);
   - cómo se muestran y editan en el panel (`FLAG_SPECS`).
 
@@ -10,11 +10,15 @@ El mismo modelo valida al escribir (panel) y al servir (API). Debe mantenerse en
 sincronía con `docs/openapi.yaml` (#/components/schemas/AppConfig).
 
 Dependencias entre flags: `history_enabled=false` ⇒ `history_save_enabled=false` y
-`export_enabled=false`. Se RESUELVEN en la app (un solo lugar); el backend guarda y
-sirve los valores tal cual y el panel solo lo advierte.
+`export_enabled=false`; `announcements_enabled=false` ⇒ no se muestra ningún anuncio.
+Se RESUELVEN en la app (un solo lugar); el backend guarda y sirve los valores tal cual
+y el panel solo lo advierte.
+
+Claves retiradas (las versiones antiguas guardadas en Firestore las conservan, pero
+`AppConfig.from_stored` las ignora): guest_mode_enabled, class_thresholds,
+hidden_classes, image_max_px, jpeg_quality, history_max_items.
 """
 
-import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
@@ -22,7 +26,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 CONFIG_SCHEMA_VERSION = 1
 
-_CATEGORY_RE = re.compile(r"^[\w\- áéíóúñÁÉÍÓÚÑ]{1,50}$")
+ANNOUNCEMENT_SLOTS = 3          # bloques de anuncios configurables desde el panel
+ANNOUNCEMENT_MAX_LEN = 500
+SCORE_THRESHOLD_MIN = 0.3       # mínimo del umbral de confianza (panel, API y demo)
 
 
 class AppConfig(BaseModel):
@@ -40,14 +46,19 @@ class AppConfig(BaseModel):
     show_api_status: bool = True
 
     # FUTURO (Fase 5): sincronización de imágenes con Cloud Storage.
-    # Hoy NO hay código detrás de esta flag ni en la app ni en el backend.
-    # Por defecto false: la app actual no sincroniza nada.
+    # Hoy NO hay código detrás de esta flag ni en la app ni en el backend, y su fila
+    # está oculta en el panel (FlagSpec.hidden). Por defecto false: la app no sincroniza.
     cloud_sync_enabled: bool = False
 
-    # --- Cuentas y acceso (efecto a partir de la Fase 3) ---
+    # --- Anuncios (noticias, enlaces a formularios de opinión, etc.) ---
+    # Texto plano; la app les da formato y convierte los enlaces. Un bloque vacío no se muestra.
+    announcements_enabled: bool = False
+    announcement_1: str = Field("", max_length=ANNOUNCEMENT_MAX_LEN)
+    announcement_2: str = Field("", max_length=ANNOUNCEMENT_MAX_LEN)
+    announcement_3: str = Field("", max_length=ANNOUNCEMENT_MAX_LEN)
+
+    # --- Cuentas y acceso (efecto a partir de la Fase 3; el login será obligatorio) ---
     registration_enabled: bool = True
-    # true mientras la app no tenga login, para que siga funcionando sin cuenta.
-    guest_mode_enabled: bool = True
 
     # --- Mantenimiento y versión ---
     maintenance_mode: bool = False
@@ -58,53 +69,45 @@ class AppConfig(BaseModel):
     min_app_version: str = Field("1.0", pattern=r"^\d+(\.\d+){0,3}$")
 
     # --- Detección ---
-    score_threshold: float = Field(0.3, ge=0.0, le=1.0)
+    score_threshold: float = Field(0.3, ge=SCORE_THRESHOLD_MIN, le=1.0)
     nms_enabled: bool = True
-    nms_iou: float = Field(0.45, ge=0.05, le=0.95)
-    max_detections: int = Field(100, ge=1, le=100)
-    class_thresholds: dict[str, float] = Field(default_factory=dict)
-    hidden_classes: list[str] = Field(default_factory=list)
+    nms_iou: float = Field(0.3, ge=0.0, le=1.0)
+    max_detections: int = Field(100, ge=3, le=100)
 
-    # --- Imagen y red ---
-    image_max_px: int = Field(640, ge=256, le=2048)
-    jpeg_quality: int = Field(85, ge=50, le=100)
+    # --- Red ---
     request_timeout_s: int = Field(60, ge=5, le=120)
     retries: int = Field(0, ge=0, le=5)
 
-    # --- Historial ---
-    history_max_items: int = Field(0, ge=0, le=100000)  # 0 = sin límite
-
-    # --- Web (Fase 6). false: la demo aún no existe y expondría inferencia pública ---
+    # --- Web. false hasta que el admin la active: expone inferencia pública ---
     demo_enabled: bool = False
 
-    @field_validator("class_thresholds")
+    @field_validator("announcement_1", "announcement_2", "announcement_3", "maintenance_message")
     @classmethod
-    def _check_thresholds(cls, v: dict[str, float]) -> dict[str, float]:
-        for cat, thr in v.items():
-            if not _CATEGORY_RE.match(cat):
-                raise ValueError(f"categoría inválida: {cat!r}")
-            if not 0.0 <= thr <= 1.0:
-                raise ValueError(f"umbral de {cat!r} fuera de 0–1")
-        return v
-
-    @field_validator("hidden_classes")
-    @classmethod
-    def _check_hidden(cls, v: list[str]) -> list[str]:
-        out: list[str] = []
-        for cat in v:
-            if not _CATEGORY_RE.match(cat):
-                raise ValueError(f"categoría inválida: {cat!r}")
-            if cat not in out:
-                out.append(cat)
-        return out
+    def _strip(cls, v: str) -> str:
+        return v.strip()
 
     @classmethod
     def from_stored(cls, data: Optional[Mapping[str, Any]]) -> "AppConfig":
-        """Lee una config guardada tolerando claves obsoletas (se ignoran) y
-        claves nuevas ausentes (toman su valor por defecto)."""
+        """Lee una config guardada tolerando claves obsoletas (se ignoran), claves
+        nuevas ausentes (toman su valor por defecto) y valores numéricos fuera de los
+        límites actuales (se recortan al límite; p. ej. un score_threshold de 0.2
+        publicado antes de que el mínimo fuera 0.3 se lee como 0.3)."""
         data = data or {}
-        known = {k: v for k, v in data.items() if k in cls.model_fields}
+        known = {k: _clamp(k, v) for k, v in data.items() if k in cls.model_fields}
         return cls.model_validate(known)
+
+
+def _clamp(key: str, value: Any) -> Any:
+    """Recorta un valor numérico guardado a los límites ge/le actuales del campo."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    for meta in AppConfig.model_fields[key].metadata:
+        ge, le = getattr(meta, "ge", None), getattr(meta, "le", None)
+        if ge is not None and value < ge:
+            value = ge
+        if le is not None and value > le:
+            value = le
+    return value
 
 
 DEFAULT_CONFIG = AppConfig()
@@ -119,23 +122,39 @@ class FlagSpec:
     label: str
     help: str
     group: str
-    kind: str  # bool | text | textarea | float | int | version | dict_float | list_str
+    kind: str  # bool | textarea | float | int | version
     min: Optional[float] = None
     max: Optional[float] = None
     step: Optional[float] = None
     depends_on: Optional[str] = None
-    future: bool = False  # sin efecto todavía
+    future: bool = False   # sin efecto todavía
+    hidden: bool = False   # no se muestra en el panel; al guardar se conserva el valor publicado
+    max_length: Optional[int] = None
 
 
 GROUPS = [
     "Funciones de la app",
+    "Anuncios",
     "Cuentas y acceso",
     "Mantenimiento y versión",
     "Detección",
-    "Imagen y red",
-    "Historial",
+    "Red",
     "Web",
 ]
+
+# Ancla e icono (Material Symbols, ver static/img/icons.svg) de cada grupo en el panel
+GROUP_UI = {
+    "Funciones de la app": ("funciones", "apps"),
+    "Anuncios": ("anuncios", "campaign"),
+    "Cuentas y acceso": ("cuentas", "manage_accounts"),
+    "Mantenimiento y versión": ("mantenimiento", "build"),
+    "Detección": ("deteccion", "center_focus_strong"),
+    "Red": ("red", "wifi"),
+    "Web": ("web", "public"),
+}
+
+_ANN_HELP = ("Texto que verá el usuario; puede incluir enlaces (p. ej. un formulario de opinión). "
+             f"Máx. {ANNOUNCEMENT_MAX_LEN} caracteres. Vacío = el bloque no se muestra.")
 
 FLAG_SPECS: list[FlagSpec] = [
     FlagSpec("camera_enabled", "Cámara", "Permite escanear con la cámara.", GROUPS[0], "bool"),
@@ -153,53 +172,54 @@ FLAG_SPECS: list[FlagSpec] = [
     FlagSpec("tips_enabled", "Consejos", "Muestra consejos de reciclaje.", GROUPS[0], "bool"),
     FlagSpec("show_api_status", "Estado de la API",
              "Muestra el indicador de estado del servidor.", GROUPS[0], "bool"),
+    # FUTURO (Fase 5): oculta en el panel mientras no haya sincronización implementada.
+    # Para mostrarla de nuevo basta con quitar hidden=True (la plantilla ya la soporta).
     FlagSpec("cloud_sync_enabled", "Sincronización en la nube",
              "Respaldo de imágenes en Cloud Storage. Aún sin implementar (Fase 5): "
-             "cambiarla no tiene efecto.", GROUPS[0], "bool", future=True),
+             "cambiarla no tiene efecto.", GROUPS[0], "bool", future=True, hidden=True),
+
+    FlagSpec("announcements_enabled", "Sección de anuncios",
+             "Muestra en la app los anuncios con texto. Apagada, no se ve ninguno.",
+             GROUPS[1], "bool"),
+    FlagSpec("announcement_1", "Anuncio 1", _ANN_HELP, GROUPS[1], "textarea",
+             depends_on="announcements_enabled", max_length=ANNOUNCEMENT_MAX_LEN),
+    FlagSpec("announcement_2", "Anuncio 2", _ANN_HELP, GROUPS[1], "textarea",
+             depends_on="announcements_enabled", max_length=ANNOUNCEMENT_MAX_LEN),
+    FlagSpec("announcement_3", "Anuncio 3", _ANN_HELP, GROUPS[1], "textarea",
+             depends_on="announcements_enabled", max_length=ANNOUNCEMENT_MAX_LEN),
 
     FlagSpec("registration_enabled", "Registro de usuarios",
-             "Permite crear cuentas nuevas desde la app (Fase 3).", GROUPS[1], "bool"),
-    FlagSpec("guest_mode_enabled", "Modo invitado",
-             "Permite usar la app sin iniciar sesión.", GROUPS[1], "bool"),
+             "Permite crear cuentas nuevas desde la app (Fase 3).", GROUPS[2], "bool"),
 
     FlagSpec("maintenance_mode", "Modo mantenimiento",
-             "La app muestra el mensaje de mantenimiento y bloquea su uso.", GROUPS[2], "bool"),
+             "La app muestra el mensaje de mantenimiento y bloquea su uso.", GROUPS[3], "bool"),
     FlagSpec("maintenance_message", "Mensaje de mantenimiento", "Máx. 500 caracteres.",
-             GROUPS[2], "textarea"),
+             GROUPS[3], "textarea", max_length=500),
     FlagSpec("min_app_version", "Versión mínima de la app",
-             "versionName mínima admitida, p. ej. 1.0 o 1.2.3.", GROUPS[2], "version"),
+             "versionName mínima admitida, p. ej. 1.0 o 1.2.3.", GROUPS[3], "version"),
 
     FlagSpec("score_threshold", "Umbral de confianza",
-             "Se envía como ?umbral= (0–1).", GROUPS[3], "float", 0, 1, 0.01),
+             "Se envía como ?umbral= (0.3–1).", GROUPS[4], "float", SCORE_THRESHOLD_MIN, 1, 0.01),
     FlagSpec("nms_enabled", "Filtro NMS", "Elimina detecciones solapadas en la app.",
-             GROUPS[3], "bool"),
+             GROUPS[4], "bool"),
     FlagSpec("nms_iou", "IoU del NMS",
-             "Solapamiento a partir del cual dos cajas son el mismo objeto.",
-             GROUPS[3], "float", 0.05, 0.95, 0.01, depends_on="nms_enabled"),
-    FlagSpec("max_detections", "Máximo de detecciones", "Detecciones mostradas por imagen.",
-             GROUPS[3], "int", 1, 100, 1),
-    FlagSpec("class_thresholds", "Umbral por categoría",
-             "Una por línea: Categoria=0.5. Vacío = usar el umbral general.",
-             GROUPS[3], "dict_float"),
-    FlagSpec("hidden_classes", "Categorías ocultas", "Separadas por comas.",
-             GROUPS[3], "list_str"),
+             "Se elimina una caja si su solapamiento con otra de más confianza es MAYOR que "
+             "este valor. 0 = elimina cualquier solapamiento; 1 = no elimina ninguna.",
+             GROUPS[4], "float", 0, 1, 0.01, depends_on="nms_enabled"),
+    FlagSpec("max_detections", "Máximo de detecciones",
+             "Detecciones mostradas por imagen (3–100).", GROUPS[4], "int", 3, 100, 1),
 
-    FlagSpec("image_max_px", "Tamaño de imagen (px)", "Lado de la imagen enviada al modelo.",
-             GROUPS[4], "int", 256, 2048, 1),
-    FlagSpec("jpeg_quality", "Calidad JPEG", "Compresión de la imagen enviada (50–100).",
-             GROUPS[4], "int", 50, 100, 1),
     FlagSpec("request_timeout_s", "Timeout de petición (s)", "Tiempo máximo de espera de /predict.",
-             GROUPS[4], "int", 5, 120, 1),
+             GROUPS[5], "int", 5, 120, 1),
     FlagSpec("retries", "Reintentos", "Reintentos de /predict ante fallo de red.",
-             GROUPS[4], "int", 0, 5, 1),
+             GROUPS[5], "int", 0, 5, 1),
 
-    FlagSpec("history_max_items", "Máximo de elementos en historial", "0 = sin límite.",
-             GROUPS[5], "int", 0, 100000, 1),
-
-    FlagSpec("demo_enabled", "Demo web", "Demo pública sin registro (Fase 6).", GROUPS[6], "bool"),
+    FlagSpec("demo_enabled", "Demo web",
+             "Página pública /demo para probar el modelo sin registro.", GROUPS[6], "bool"),
 ]
 
 SPECS_BY_KEY = {s.key: s for s in FLAG_SPECS}
+VISIBLE_SPECS = [s for s in FLAG_SPECS if not s.hidden]
 assert set(SPECS_BY_KEY) == set(AppConfig.model_fields), "FLAG_SPECS y AppConfig no coinciden"
 
 
@@ -208,66 +228,62 @@ assert set(SPECS_BY_KEY) == set(AppConfig.model_fields), "FLAG_SPECS y AppConfig
 # --------------------------------------------------------------------------- #
 def to_form_values(cfg: AppConfig) -> dict[str, Any]:
     """Valores para pintar el formulario del panel."""
-    data = cfg.model_dump()
-    out: dict[str, Any] = {}
-    for spec in FLAG_SPECS:
-        v = data[spec.key]
-        if spec.kind == "dict_float":
-            out[spec.key] = "\n".join(f"{k}={val}" for k, val in v.items())
-        elif spec.kind == "list_str":
-            out[spec.key] = ", ".join(v)
-        else:
-            out[spec.key] = v
-    return out
+    return cfg.model_dump()
 
 
-def parse_form(form: Mapping[str, Any]) -> tuple[Optional[AppConfig], dict[str, Any], dict[str, str]]:
+def _num(v: Any) -> str:
+    return f"{v:g}" if isinstance(v, float) else str(v)
+
+
+def _error_es(spec: Optional[FlagSpec], err: Mapping[str, Any]) -> str:
+    """Mensaje en español para un error de validación de Pydantic."""
+    etype, ctx = err.get("type", ""), err.get("ctx") or {}
+    if etype == "string_pattern_mismatch" and spec and spec.kind == "version":
+        return "Formato no válido: usa números separados por puntos, p. ej. 1.0 o 1.2.3."
+    if etype == "greater_than_equal":
+        return f"Debe ser mayor o igual que {_num(ctx.get('ge'))}."
+    if etype == "less_than_equal":
+        return f"Debe ser menor o igual que {_num(ctx.get('le'))}."
+    if etype in ("int_parsing", "int_from_float", "int_type"):
+        return "Debe ser un número entero."
+    if etype in ("float_parsing", "float_type"):
+        return "Debe ser un número."
+    if etype == "string_too_long":
+        return f"Máximo {ctx.get('max_length')} caracteres."
+    if etype == "missing":
+        return "Campo obligatorio."
+    return "Valor no válido."
+
+
+def parse_form(form: Mapping[str, Any], current: Optional[AppConfig] = None
+               ) -> tuple[Optional[AppConfig], dict[str, Any], dict[str, str]]:
     """Convierte el formulario del panel en `AppConfig`.
 
+    `current` es la config publicada: las claves ocultas en el panel (`hidden`)
+    conservan su valor en vez de volver al valor por defecto.
     Devuelve (config o None, valores crudos para repintar, errores por campo).
     """
+    base = (current or DEFAULT_CONFIG).model_dump()
     raw: dict[str, Any] = {}
     values: dict[str, Any] = {}
-    errors: dict[str, str] = {}
 
     for spec in FLAG_SPECS:
-        if spec.kind == "bool":
+        if spec.hidden:
+            raw[spec.key] = values[spec.key] = base[spec.key]
+        elif spec.kind == "bool":
             raw[spec.key] = values[spec.key] = spec.key in form
-            continue
-
-        text = str(form.get(spec.key, "")).strip()
-        values[spec.key] = text
-
-        if spec.kind == "dict_float":
-            parsed: dict[str, float] = {}
-            for n, line in enumerate(text.splitlines(), 1):
-                line = line.strip()
-                if not line:
-                    continue
-                cat, sep, num = line.partition("=")
-                try:
-                    if not sep:
-                        raise ValueError
-                    parsed[cat.strip()] = float(num.strip().replace(",", "."))
-                except ValueError:
-                    errors[spec.key] = f"Línea {n}: usa el formato Categoria=0.5"
-                    break
-            raw[spec.key] = parsed
-        elif spec.kind == "list_str":
-            raw[spec.key] = [p.strip() for p in text.split(",") if p.strip()]
-        elif spec.kind == "float":
-            raw[spec.key] = text.replace(",", ".")
         else:
-            raw[spec.key] = text
+            text = str(form.get(spec.key, "")).strip()
+            values[spec.key] = text
+            raw[spec.key] = text.replace(",", ".") if spec.kind == "float" else text
 
-    if errors:
-        return None, values, errors
     try:
         return AppConfig.model_validate(raw), values, {}
     except ValidationError as exc:
+        errors: dict[str, str] = {}
         for err in exc.errors():
             key = str(err["loc"][0]) if err["loc"] else "_"
-            errors.setdefault(key, err["msg"])
+            errors.setdefault(key, _error_es(SPECS_BY_KEY.get(key), err))
         return None, values, errors
 
 
