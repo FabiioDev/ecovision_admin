@@ -1,0 +1,20 @@
+# Archivos que `gcloud run deploy --source backend` NO sube a Cloud Build.
+# Sin este archivo se subirían .env (secretos locales) y .venv (cientos de MB).
+.gcloudignore
+.git
+.gitignore
+
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+*service-account*.json
+*-sa.json
+credentials*.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+tests/
