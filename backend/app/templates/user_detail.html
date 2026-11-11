@@ -1,20 +1,28 @@
 {% extends "base.html" %}
 {% block title %}{{ user.email or user.uid }}{% endblock %}
+{% block heading %}Usuario{% endblock %}
 {% block content %}
 {% set can_edit = admin.can('editor') %}
-<p><a href="/admin/users">← Usuarios</a></p>
-<div class="page-head">
-  <h1>{{ user.email or user.uid }}</h1>
-  {% if user.disabled %}<span class="badge badge-off">desactivado</span>{% else %}<span class="badge badge-on">activo</span>{% endif %}
+<a class="back-link" href="/admin/users">{{ icon('arrow_back', 'icon-sm') }}Usuarios</a>
+
+<div class="profile-head">
+  <span class="avatar avatar-lg {{ 'avatar-muted' if user.disabled }}">{{ (user.display_name or user.email or user.uid) | initials }}</span>
+  <div>
+    <h1>{{ user.display_name or user.email or user.uid }}</h1>
+    <div class="actions-row">
+      {% if user.display_name %}<span class="muted">{{ user.email }}</span>{% endif %}
+      {% if user.disabled %}<span class="pill pill-error">{{ icon('block') }}Desactivado</span>{% else %}<span class="pill">{{ icon('check_circle') }}Activo</span>{% endif %}
+      {% for p in user.providers %}<span class="pill pill-neutral">{{ p }}</span>{% endfor %}
+    </div>
+  </div>
 </div>
 
 <div class="grid-2">
   <section class="card">
-    <h2>Cuenta</h2>
-    <dl>
+    <div class="card-head"><h2>{{ icon('person') }}Cuenta</h2></div>
+    <dl class="dl">
       <dt>UID</dt><dd><code>{{ user.uid }}</code></dd>
-      <dt>Proveedor</dt><dd>{{ user.providers | join(', ') or '—' }}</dd>
-      <dt>Correo verificado</dt><dd>{{ 'sí' if user.email_verified else 'no' }}</dd>
+      <dt>Correo verificado</dt><dd>{{ 'Sí' if user.email_verified else 'No' }}</dd>
       <dt>Alta</dt><dd>{{ user.created_at | dt }}</dd>
       <dt>Último acceso</dt><dd>{{ user.last_sign_in | dt }}</dd>
       {% if profile.created_by %}<dt>Creado por</dt><dd>{{ profile.created_by }}</dd>{% endif %}
@@ -22,13 +30,13 @@
   </section>
 
   <section class="card">
-    <h2>Datos</h2>
+    <div class="card-head"><h2>{{ icon('edit') }}Datos</h2></div>
     <form method="post" action="/admin/users/{{ user.uid }}">
       <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
       <fieldset {{ 'disabled' if not can_edit }}>
-        <label>Correo <input type="email" name="email" value="{{ user.email or '' }}"></label>
-        <label>Nombre <input name="display_name" value="{{ user.display_name or '' }}" maxlength="100"></label>
-        {% if can_edit %}<button class="btn btn-primary" type="submit">Guardar</button>{% endif %}
+        <label class="form-field"><span>Correo</span><input type="email" name="email" value="{{ user.email or '' }}"></label>
+        <label class="form-field"><span>Nombre</span><input name="display_name" value="{{ user.display_name or '' }}" maxlength="100"></label>
+        {% if can_edit %}<button class="btn btn-primary" type="submit">{{ icon('check') }}Guardar</button>{% endif %}
       </fieldset>
     </form>
   </section>
@@ -37,42 +45,53 @@
 {% if can_edit %}
 <div class="grid-2">
   <section class="card">
-    <h2>Contraseña</h2>
+    <div class="card-head"><h2>{{ icon('lock_reset') }}Contraseña</h2></div>
     {% if 'Correo' in user.providers %}
-    <form method="post" action="/admin/users/{{ user.uid }}/password" autocomplete="off">
+    <form method="post" action="/admin/users/{{ user.uid }}/password" autocomplete="off"
+          data-confirm="Se cambiará la contraseña y se cerrarán todas las sesiones abiertas del usuario."
+          data-confirm-title="¿Cambiar la contraseña?" data-confirm-ok="Cambiar contraseña">
       <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-      <label>Nueva contraseña <input type="password" name="password" minlength="{{ min_pw }}" required autocomplete="new-password"></label>
-      <button class="btn" type="submit">Cambiar contraseña</button>
+      <label class="form-field"><span>Nueva contraseña</span>
+        <input type="password" name="password" minlength="{{ min_pw }}" required autocomplete="new-password">
+      </label>
+      <button class="btn" type="submit">{{ icon('lock_reset') }}Cambiar contraseña</button>
     </form>
     {% else %}
-    <p class="muted">La cuenta no usa correo/contraseña (inicia sesión con Google).</p>
+    <p class="muted">Esta cuenta inicia sesión con Google; no tiene contraseña propia.</p>
     {% endif %}
   </section>
 
   <section class="card">
-    <h2>Acceso</h2>
+    <div class="card-head"><h2>{{ icon('verified_user') }}Acceso</h2></div>
+    <p class="muted">{{ 'El usuario no puede iniciar sesión en la app.' if user.disabled else 'Al desactivarlo se cierran sus sesiones y no podrá iniciar sesión.' }}</p>
     <form method="post" action="/admin/users/{{ user.uid }}/toggle"
-          data-confirm="{{ '¿Activar este usuario?' if user.disabled else '¿Desactivar este usuario? Se cerrarán sus sesiones.' }}">
+          data-confirm="{{ 'El usuario podrá volver a iniciar sesión.' if user.disabled else 'Se cerrarán sus sesiones y no podrá iniciar sesión hasta que lo actives.' }}"
+          data-confirm-title="{{ '¿Activar este usuario?' if user.disabled else '¿Desactivar este usuario?' }}"
+          data-confirm-ok="{{ 'Activar' if user.disabled else 'Desactivar' }}" {% if not user.disabled %}data-confirm-danger{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
       <input type="hidden" name="disable" value="{{ '0' if user.disabled else '1' }}">
-      <button class="btn {{ '' if user.disabled else 'btn-warning' }}" type="submit">
-        {{ 'Activar usuario' if user.disabled else 'Desactivar usuario' }}
-      </button>
+      {% if user.disabled %}
+      <button class="btn btn-primary" type="submit">{{ icon('check_circle') }}Activar usuario</button>
+      {% else %}
+      <button class="btn btn-danger-outline" type="submit">{{ icon('block') }}Desactivar usuario</button>
+      {% endif %}
     </form>
   </section>
 </div>
 {% endif %}
 
 {% if admin.can('superadmin') %}
-<section class="card danger">
-  <h2>Eliminar usuario</h2>
-  <p>Elimina la cuenta de Firebase Authentication y su perfil. No se puede deshacer.</p>
-  <form method="post" action="/admin/users/{{ user.uid }}/delete" data-confirm="¿Eliminar definitivamente este usuario?">
+<section class="card card-danger">
+  <div class="card-head"><h2>{{ icon('delete') }}Eliminar usuario</h2></div>
+  <p>Elimina la cuenta de Firebase Authentication y su perfil. <strong>No se puede deshacer.</strong></p>
+  <form method="post" action="/admin/users/{{ user.uid }}/delete"
+        data-confirm="La cuenta {{ user.email or user.uid }} se eliminará de forma permanente."
+        data-confirm-title="¿Eliminar definitivamente?" data-confirm-ok="Eliminar" data-confirm-danger>
     <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-    <label>Escribe <code>{{ user.email or user.uid }}</code> para confirmar
+    <label class="form-field"><span>Escribe <code>{{ user.email or user.uid }}</code> para confirmar</span>
       <input name="confirm_email" required autocomplete="off">
     </label>
-    <button class="btn btn-danger" type="submit">Eliminar</button>
+    <button class="btn btn-danger" type="submit">{{ icon('delete') }}Eliminar usuario</button>
   </form>
 </section>
 {% endif %}

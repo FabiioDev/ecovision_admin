@@ -1,18 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Iniciar sesión{% endblock %}
-{% block content %}
-<div class="card narrow">
-  <h1>Iniciar sesión</h1>
-  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-  <form method="post" action="/admin/login" autocomplete="on">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <label>Usuario
-      <input name="username" value="{{ username or '' }}" required autofocus autocomplete="username" maxlength="40">
-    </label>
-    <label>Contraseña
-      <input type="password" name="password" required autocomplete="current-password">
-    </label>
-    <button class="btn btn-primary" type="submit">Entrar</button>
-  </form>
-</div>
+{% block bare %}
+<main class="login-page">
+  <div class="card login-card">
+    <span class="brand">{{ icon('recycling') }}EcoVision SV</span>
+    <div class="label-md muted">Panel de administración</div>
+    <h1 class="title-lg">Hola de nuevo</h1>
+    <p class="muted">Inicia sesión con tu cuenta de administrador.</p>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert">{{ icon('error') }}<span>{{ error }}</span></div>
+    {% endif %}
+
+    <form method="post" action="/admin/login" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="form-field"><span>Usuario</span>
+        <input name="username" value="{{ username or '' }}" required autofocus autocomplete="username" maxlength="40"
+               class="{{ 'input-error' if error }}">
+      </label>
+      <label class="form-field"><span>Contraseña</span>
+        <input type="password" name="password" required autocomplete="current-password" class="{{ 'input-error' if error }}">
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">Entrar</button>
+    </form>
+  </div>
+</main>
 {% endblock %}

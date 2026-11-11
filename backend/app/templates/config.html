@@ -1,107 +1,200 @@
 {% extends "base.html" %}
 {% block title %}Configuración{% endblock %}
+{% block heading %}Configuración de la app{% endblock %}
 {% block content %}
 {% set can_edit = admin.can('editor') %}
+
 <div class="page-head">
   <div>
-    <h1>Configuración de la app</h1>
+    <div class="section-label">Flags y parámetros</div>
+    <h1 class="headline-lg">Configuración de la app</h1>
     <p class="muted">
-      Versión publicada: <strong>{{ snapshot.version }}</strong>
-      {% if snapshot.version == 0 %}(valores por defecto; aún no se ha guardado ninguna versión){% endif %}
-      {% if snapshot.updated_at %} · {{ snapshot.updated_at | dt }} por {{ snapshot.updated_by }}{% endif %}
+      {% if snapshot.version == 0 %}
+        La app usa los <strong>valores por defecto</strong>; aún no se ha publicado ningún cambio.
+      {% else %}
+        Último cambio publicado <span class="pill">#{{ snapshot.version }}</span>
+        · {{ snapshot.updated_at | dt }} por <strong>{{ snapshot.updated_by }}</strong>
+      {% endif %}
     </p>
   </div>
   {% if can_edit %}
-  <form method="post" action="/admin/config/reset"
-        data-confirm="¿Restablecer TODAS las flags y parámetros a sus valores por defecto? Se creará una versión nueva con la config con la que la app funciona completa.">
-    <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-    <button class="btn btn-warning" type="submit">Restablecer valores por defecto</button>
-  </form>
+  <div class="page-actions">
+    <form method="post" action="/admin/config/reset"
+          data-confirm="Todas las flags y parámetros volverán a los valores con los que la app funciona completa. Se publicará como un cambio nuevo."
+          data-confirm-title="¿Restablecer valores por defecto?" data-confirm-ok="Restablecer y publicar">
+      <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+      <button class="btn" type="submit">{{ icon('restart_alt') }}Restablecer valores por defecto</button>
+    </form>
+  </div>
   {% endif %}
 </div>
 
-{% if errors %}<div class="alert alert-error">Revisa los campos marcados; no se guardó nada.</div>{% endif %}
+{% if not can_edit %}
+<div class="alert alert-info">{{ icon('info') }}<span>Tu rol es <strong>lector</strong>: puedes ver la configuración, pero no cambiarla.</span></div>
+{% endif %}
+{% if notice %}<div class="alert alert-info">{{ icon('info') }}<span>{{ notice }}</span></div>{% endif %}
+{% if errors %}<div class="alert alert-error">{{ icon('error') }}<span>Hay {{ errors | length }} campo(s) con errores. No se publicó nada.</span></div>{% endif %}
 
-<form method="post" action="/admin/config" class="config-form" id="config-form">
-  <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-  <fieldset {{ 'disabled' if not can_edit }}>
-  {% for group in groups %}
-  <section class="card">
-    <h2>{{ group }}</h2>
-    <div class="grid">
-    {% for spec in specs if spec.group == group %}
-      {% set v = values[spec.key] %}
-      {% set changed = v != defaults[spec.key] %}
-      <div class="field {{ 'has-error' if errors.get(spec.key) }} {{ 'changed' if changed }}"
-           {% if spec.depends_on %}data-depends-on="{{ spec.depends_on }}"{% endif %}>
-        {% if spec.kind == 'bool' %}
-          <label class="switch">
-            <input type="checkbox" name="{{ spec.key }}" id="f-{{ spec.key }}" {{ 'checked' if v }}>
-            <span>{{ spec.label }}</span>
-            {% if spec.future %}<small class="badge badge-future">sin efecto aún</small>{% endif %}
-          </label>
-        {% else %}
-          <label for="f-{{ spec.key }}">{{ spec.label }}</label>
-          {% if spec.kind in ('textarea', 'dict_float') %}
-            <textarea name="{{ spec.key }}" id="f-{{ spec.key }}" rows="3">{{ v }}</textarea>
-          {% elif spec.kind in ('float', 'int') %}
-            <input type="number" name="{{ spec.key }}" id="f-{{ spec.key }}" value="{{ v }}"
-                   min="{{ spec.min }}" max="{{ spec.max }}" step="{{ spec.step }}" required>
+<div class="config-layout">
+  <form method="post" action="/admin/config" id="config-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+    <fieldset {{ 'disabled' if not can_edit }}>
+
+    {# Las flags con hidden=True en flags/catalog.py no se pintan (specs = VISIBLE_SPECS).
+       Hoy: cloud_sync_enabled ("Sincronización en la nube", Fase 5). Se conserva su valor
+       publicado al guardar. Para mostrarla, quitar hidden=True en el catálogo. #}
+    {% for group in groups %}
+    {% set gid, gicon = group_ui[group] %}
+    <section class="config-group" id="{{ gid }}">
+      <h2 class="section-label">{{ icon(gicon, 'icon-sm') }}{{ group }}</h2>
+      <div class="card">
+      {% for spec in specs if spec.group == group %}
+        {% set key = spec.key %}
+        {% set v = values[key] %}
+        {% set is_default = published_form[key] == defaults[key] %}
+        {% set wide = spec.kind == 'textarea' %}
+        <div class="flag-row {{ 'stack' if wide }} {{ 'has-error' if errors.get(key) }}"
+             data-key="{{ key }}" data-label="{{ spec.label }}"
+             {% if spec.depends_on %}data-depends-on="{{ spec.depends_on }}"{% endif %}>
+          <div class="flag-text">
+            <div class="flag-title">
+              <label class="label-lg" for="f-{{ key }}">{{ spec.label }}</label>
+              {% if spec.future %}<span class="pill pill-warn">{{ icon('schedule') }}Próximamente</span>{% endif %}
+              {% if not is_default %}<span class="pill pill-blue" title="Por defecto: {{ defaults[key] if defaults[key] != '' else '(vacío)' }}">Distinto al valor por defecto</span>{% endif %}
+            </div>
+            <p class="flag-desc">{{ spec.help }}</p>
+            <div class="flag-meta">
+              <code>{{ key }}</code>
+              {% if spec.depends_on %}
+              <span class="dep-note">{{ icon('info', 'icon-sm') }}Sin efecto: <code>{{ spec.depends_on }}</code> está desactivado</span>
+              {% endif %}
+            </div>
+            {% if errors.get(key) %}<div class="field-error">{{ icon('error', 'icon-sm') }}{{ errors[key] }}</div>{% endif %}
+          </div>
+
+          <div class="flag-control">
+          {% if spec.kind == 'bool' %}
+            <label class="switch">
+              <input type="checkbox" role="switch" id="f-{{ key }}" name="{{ key }}" data-field="{{ key }}"
+                     data-published="{{ published[key] }}" {{ 'checked' if v }}>
+              <span class="track"><span class="thumb">{{ icon('check') }}</span></span>
+            </label>
+          {% elif spec.kind == 'float' %}
+            <div class="range">
+              <input type="range" id="f-{{ key }}" name="{{ key }}" data-field="{{ key }}" data-published="{{ published[key] }}"
+                     value="{{ v }}" min="{{ spec.min }}" max="{{ spec.max }}" step="{{ spec.step }}">
+              <output class="pill" for="f-{{ key }}">{{ v }}</output>
+            </div>
+          {% elif spec.kind == 'int' %}
+            <input class="input {{ 'input-error' if errors.get(key) }}" type="number" id="f-{{ key }}" name="{{ key }}"
+                   data-field="{{ key }}" data-published="{{ published[key] }}" value="{{ v }}"
+                   min="{{ spec.min | int }}" max="{{ spec.max | int }}" step="1" required>
+          {% elif spec.kind == 'textarea' %}
+            <textarea class="input {{ 'input-error' if errors.get(key) }}" id="f-{{ key }}" name="{{ key }}" rows="3"
+                      data-field="{{ key }}" data-published="{{ published[key] }}"
+                      {% if spec.max_length %}maxlength="{{ spec.max_length }}"{% endif %}>{{ v }}</textarea>
           {% else %}
-            <input type="text" name="{{ spec.key }}" id="f-{{ spec.key }}" value="{{ v }}">
+            <input class="input {{ 'input-error' if errors.get(key) }}" type="text" id="f-{{ key }}" name="{{ key }}"
+                   data-field="{{ key }}" data-published="{{ published[key] }}" value="{{ v }}"
+                   {% if spec.kind == 'version' %}placeholder="1.0" inputmode="decimal"{% endif %}>
           {% endif %}
-        {% endif %}
-        <small class="help">{{ spec.help }}
-          <code>{{ spec.key }}</code>
-          {% if changed %}· por defecto: <code>{{ defaults[spec.key] if defaults[spec.key] != '' else '(vacío)' }}</code>{% endif %}
-        </small>
-        {% if spec.depends_on %}
-          <small class="dep-note">Si <code>{{ spec.depends_on }}</code> está desactivado, la app ignora este valor.</small>
-        {% endif %}
-        {% if errors.get(spec.key) %}<small class="error">{{ errors[spec.key] }}</small>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
       </div>
+    </section>
     {% endfor %}
-    </div>
-  </section>
-  {% endfor %}
-  {% if can_edit %}
-  <div class="sticky-actions">
-    <input type="text" name="note" placeholder="Nota del cambio (opcional)" maxlength="200">
-    <button class="btn btn-primary" type="submit">Guardar nueva versión</button>
-  </div>
-  {% endif %}
-  </fieldset>
-</form>
 
-<section class="card">
-  <h2>Versiones</h2>
-  {% if versions %}
-  <table>
-    <thead><tr><th>Versión</th><th>Fecha</th><th>Por</th><th>Acción</th><th>Nota</th><th></th></tr></thead>
-    <tbody>
-    {% for ver in versions %}
-      <tr>
-        <td>{{ ver.version }}{% if ver.version == snapshot.version %} <small class="badge">actual</small>{% endif %}</td>
-        <td>{{ ver.created_at | dt }}</td>
-        <td>{{ ver.created_by }}</td>
-        <td>{{ ver.action }}</td>
-        <td>{{ ver.note }}</td>
-        <td class="actions">
-          <a href="/admin/config/versions/{{ ver.version }}">Ver</a>
-          {% if can_edit and ver.version != snapshot.version %}
-          <form method="post" action="/admin/config/rollback/{{ ver.version }}"
-                data-confirm="¿Publicar de nuevo la versión {{ ver.version }}?">
-            <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-            <button class="btn btn-small" type="submit">Restaurar</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
+    {% if can_edit %}
+    <noscript>
+      <div class="card noscript-publish">
+        <label class="form-field"><span>Nota del cambio (opcional)</span><input name="note" maxlength="200"></label>
+        <label><input type="checkbox" name="confirmed" value="1" required> Confirmo que quiero publicar estos cambios</label>
+        <p><button class="btn btn-primary" type="submit">{{ icon('publish') }}Publicar cambios</button></p>
+      </div>
+    </noscript>
+
+    <dialog class="dialog" id="publish-dialog" aria-labelledby="publish-title">
+      <div class="dialog-body">
+        <div class="dialog-icon">{{ icon('publish') }}</div>
+        <h2 id="publish-title">¿Publicar <span data-n></span> cambio(s)?</h2>
+        <p>La app descargará esta configuración la próxima vez que la consulte. Quedará registrada en el
+          historial como el cambio <strong>#{{ snapshot.version + 1 }}</strong>.</p>
+        <ul class="changes-list" data-changes></ul>
+        <label class="form-field"><span>Nota del cambio (opcional)</span>
+          <input name="note" maxlength="200" placeholder="Ej.: desactivar exportación temporalmente">
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-cancel>Seguir editando</button>
+        <button type="submit" class="btn btn-primary" name="confirmed" value="1">{{ icon('check') }}Sí, publicar</button>
+      </div>
+    </dialog>
+    {% endif %}
+    </fieldset>
+  </form>
+
+  <nav class="toc" aria-label="Secciones de la configuración">
+    <div class="section-label">En esta página</div>
+    {% for group in groups %}
+    {% set gid, gicon = group_ui[group] %}
+    <a href="#{{ gid }}" data-group="{{ gid }}">{{ icon(gicon, 'icon-sm') }}{{ group }}
+      {% if modified[group] %}<span class="pill pill-blue count" title="Valores distintos al valor por defecto">{{ modified[group] }}</span>{% endif %}
+      <span class="pending-dot" title="Cambios sin publicar"></span>
+    </a>
     {% endfor %}
-    </tbody>
-  </table>
+    <a href="#historial-cambios">{{ icon('history', 'icon-sm') }}Historial de cambios</a>
+  </nav>
+</div>
+
+<section class="config-group" id="historial-cambios">
+  <h2 class="section-label">{{ icon('history', 'icon-sm') }}Historial de cambios</h2>
+  <p class="muted section-note">Cada publicación queda numerada para auditoría y para poder restaurarla. El número no es una versión de la app.</p>
+  <div class="card">
+  {% if versions %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Cambio</th><th>Fecha</th><th>Por</th><th class="hide-sm">Acción</th><th class="hide-sm">Nota</th><th></th></tr></thead>
+      <tbody>
+      {% for ver in versions %}
+        <tr>
+          <td class="nowrap"><strong>#{{ ver.version }}</strong>
+            {% if ver.version == snapshot.version %}<span class="pill">Actual</span>{% endif %}</td>
+          <td class="nowrap">{{ ver.created_at | dt }}</td>
+          <td>{{ ver.created_by }}</td>
+          <td class="hide-sm">
+            {% if ver.action == 'config.reset' %}<span class="pill pill-warn">Restablecida</span>
+            {% elif ver.action == 'config.rollback' %}<span class="pill pill-blue">Restaurada</span>
+            {% else %}<span class="pill pill-neutral">Editada</span>{% endif %}
+          </td>
+          <td class="hide-sm muted">{{ ver.note or '—' }}</td>
+          <td class="num nowrap">
+            <a class="btn btn-text btn-sm" href="/admin/config/versions/{{ ver.version }}">{{ icon('visibility', 'icon-sm') }}Ver</a>
+            {% if can_edit and ver.version != snapshot.version %}
+            <form method="post" action="/admin/config/rollback/{{ ver.version }}" class="inline-form"
+                  data-confirm="Se publicará de nuevo la configuración del cambio #{{ ver.version }} como un cambio nuevo."
+                  data-confirm-title="¿Restaurar el cambio #{{ ver.version }}?" data-confirm-ok="Restaurar y publicar">
+              <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+              <button class="btn btn-sm" type="submit">{{ icon('settings_backup_restore', 'icon-sm') }}Restaurar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
   {% else %}
-  <p class="muted">Aún no hay versiones guardadas.</p>
+    <div class="empty muted">{{ icon('history') }}<div>Aún no se ha publicado ningún cambio.</div></div>
   {% endif %}
+  </div>
 </section>
+
+{% if can_edit %}
+<div class="pending-bar" id="pending-bar" role="region" aria-live="polite" aria-label="Cambios sin publicar">
+  <span class="count">{{ icon('edit') }}<span data-count>0 cambios sin publicar</span></span>
+  <button type="button" class="btn btn-text" data-discard>{{ icon('undo') }}Descartar</button>
+  <button type="button" class="btn btn-primary" data-review>{{ icon('publish') }}Revisar y publicar</button>
+</div>
+{% endif %}
 {% endblock %}

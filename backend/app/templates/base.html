@@ -4,32 +4,94 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>{% block title %}Panel{% endblock %} · EcoVision Admin</title>
-  <link rel="stylesheet" href="/admin/static/admin.css">
-  <script src="/admin/static/admin.js" defer></script>
+  <title>{% block title %}Panel{% endblock %} · EcoVision SV Admin</title>
+  <link rel="preload" href="/admin/static/fonts/BeVietnamPro-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/admin/static/css/ecovision.css">
+  <link rel="stylesheet" href="/admin/static/css/admin.css">
+  <script src="/admin/static/js/admin.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/admin/config">EcoVision <span>Admin</span></a>
-    {% if admin %}
-    <nav>
-      {% set path = request.url.path %}
-      <a href="/admin/config" class="{{ 'active' if path.startswith('/admin/config') }}">Configuración</a>
-      <a href="/admin/users" class="{{ 'active' if path.startswith('/admin/users') }}">Usuarios</a>
-      <a href="/admin/audit" class="{{ 'active' if path.startswith('/admin/audit') }}">Auditoría</a>
+{% set path = request.url.path %}
+{% set nav = [
+  ("/admin/config", "Configuración", "tune"),
+  ("/admin/users", "Usuarios", "group"),
+  ("/admin/audit", "Auditoría", "history"),
+] %}
+
+{% if admin %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand-block">
+      <a class="brand" href="/admin/config">{{ icon('recycling') }}EcoVision SV</a>
+      <small class="label-md">Panel de administración</small>
+    </div>
+    <nav class="nav" aria-label="Secciones">
+      {% for href, label, ic in nav %}
+      <a href="{{ href }}" class="{{ 'active' if path.startswith(href) }}" {% if path.startswith(href) %}aria-current="page"{% endif %}>
+        {{ icon(ic) }}{{ label }}
+      </a>
+      {% endfor %}
     </nav>
-    <div class="who">
-      <span>{{ admin.username }} <small class="badge">{{ admin.role }}</small></span>
-      <form method="post" action="/admin/logout">
-        <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-        <button class="btn btn-link" type="submit">Cerrar sesión</button>
-      </form>
+    <div class="sidebar-foot muted">Backend v{{ app_version }}</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <a class="brand" href="/admin/config">{{ icon('recycling') }}EcoVision SV</a>
+      <div class="topbar-title">{% block heading %}{% endblock %}</div>
+      {% if status %}
+      <a class="status-pill hide-sm" href="/admin/config" title="Configuración que descarga la app">
+        {% if status.maintenance %}<span class="dot dot-wait"></span>Mantenimiento activo
+        {% else %}<span class="dot"></span>Config publicada · #{{ status.version }}{% endif %}
+      </a>
+      {% endif %}
+      <div class="admin-menu">
+        <div class="who"><strong>{{ admin.username }}</strong><span>{{ admin.role | capitalize }}</span></div>
+        <span class="avatar" aria-hidden="true">{{ admin.username | initials }}</span>
+        <form method="post" action="/admin/logout">
+          <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
+          <button class="btn btn-text btn-icon" type="submit" title="Cerrar sesión" aria-label="Cerrar sesión">{{ icon('logout') }}</button>
+        </form>
+      </div>
+    </header>
+
+    {% if status and status.maintenance %}
+    <div class="banner-maintenance" role="status">
+      {{ icon('warning') }}<span>El modo mantenimiento está <strong>activo</strong>: la app muestra el mensaje de mantenimiento y no se puede usar.
+      {% if not path.startswith('/admin/config') %}<a href="/admin/config#mantenimiento">Ir a mantenimiento</a>{% endif %}</span>
     </div>
     {% endif %}
-  </header>
-  <main class="container">
-    {% if flash %}<div class="alert alert-{{ flash.k }}">{{ flash.m }}</div>{% endif %}
-    {% block content %}{% endblock %}
-  </main>
+
+    <main class="content">
+      {% if flash %}
+      <div class="alert alert-{{ flash.k }}" role="status">
+        {{ icon({'ok': 'check_circle', 'error': 'error', 'info': 'info'}.get(flash.k, 'info')) }}<span>{{ flash.m }}</span>
+      </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<nav class="bottom-nav" aria-label="Secciones">
+  {% for href, label, ic in nav %}
+  <a href="{{ href }}" class="{{ 'active' if path.startswith(href) }}"><span class="ind">{{ icon(ic) }}</span>{{ label }}</a>
+  {% endfor %}
+</nav>
+{% else %}
+  {% block bare %}{% endblock %}
+{% endif %}
+
+<dialog class="dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+  <div class="dialog-body">
+    <div class="dialog-icon">{{ icon('warning') }}</div>
+    <h2 id="confirm-title" data-title>¿Confirmar acción?</h2>
+    <p data-message></p>
+  </div>
+  <div class="dialog-actions">
+    <button type="button" class="btn" data-cancel>Cancelar</button>
+    <button type="button" class="btn btn-primary" data-ok>Confirmar</button>
+  </div>
+</dialog>
 </body>
 </html>

@@ -1,0 +1,211 @@
+/* =========================================================================
+   EcoVision SV — hoja de estilos compartida (panel de administración y demo web)
+   Tokens y componentes según DESIGN.md (raíz del workspace). Solo tema claro.
+   Usa siempre las variables; no escribas hex sueltos fuera de :root.
+   ========================================================================= */
+
+@font-face { font-family: "Be Vietnam Pro"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("../fonts/BeVietnamPro-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Be Vietnam Pro"; font-weight: 500; font-style: normal; font-display: swap;
+  src: url("../fonts/BeVietnamPro-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Be Vietnam Pro"; font-weight: 600 700; font-style: normal; font-display: swap;
+  src: url("../fonts/BeVietnamPro-SemiBold.ttf") format("truetype"); }
+
+:root {
+  /* Marca */
+  --primary: #096430;           --on-primary: #FFFFFF;
+  --primary-container: #2D7D46; --on-primary-container: #CCFFD1;
+  --primary-fixed: #A3F5B2;     --primary-fixed-dim: #87D898;
+  --on-primary-fixed-variant: #005225;
+  --primary-20: rgba(9, 100, 48, 0.2);
+  --primary-08: rgba(9, 100, 48, 0.08);
+  --secondary: #005DB6;         --secondary-fixed: #D6E3FF;
+  --on-secondary-fixed-variant: #00468C;
+  --tertiary: #4E575E;
+  --error: #BA1A1A;             --on-error: #FFFFFF;
+  --error-container: #FFDAD6;   --on-error-container: #93000A;
+
+  /* Superficies y texto */
+  --background: #F8F9FA;        --surface: #F8F9FA;
+  --surface-lowest: #FFFFFF;    --surface-low: #F3F4F5;
+  --surface-container: #EDEEEF; --surface-high: #E7E8E9;
+  --surface-highest: #E1E3E4;
+  --on-surface: #191C1D;        --on-surface-variant: #404940;
+  --outline: #707A6F;           --outline-variant: #BFC9BD;
+  --outline-variant-60: rgba(191, 201, 189, 0.6);
+  --inverse-surface: #2E3132;   --inverse-on-surface: #F0F1F2;
+  --scrim-40: rgba(0, 0, 0, 0.4);
+
+  /* Estado */
+  --status-ok: #2E7D32;  --status-wait: #F9A825;  --status-off: #C62828;
+  --status-pill-bg: #F1F5F9;  --status-pill-border: #E2E8F0;
+  --alert-bg: #FFF5F5;   --alert-border: #FECACA;
+  --warn-bg: #FFF4D6;    --warn-border: #F9D77E;  --on-warn: #4A3500;
+
+  /* Detección (en orden) */
+  --det-1: #26A641; --det-2: #0A84FF; --det-3: #FF9F0A; --det-4: #32ADE6;
+  --det-5: #FF375F; --det-6: #BF5AF2; --det-7: #FF6961; --det-8: #30D158;
+
+  /* Radios */
+  --radius-sm: 4px;  --radius: 8px;  --radius-md: 12px;  --radius-lg: 16px;
+  --radius-xl: 24px; --radius-full: 999px;
+
+  /* Espaciado (cuadrícula de 8) */
+  --space-base: 8px;  --space-stack-sm: 4px;  --space-stack-md: 12px;
+  --space-stack-lg: 24px;  --margin-mobile: 16px;  --margin-tablet: 24px;  --gutter: 16px;
+
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font: 400 14px/20px var(--font); color: var(--on-surface-variant); background: var(--background); }
+h1, h2, h3 { color: var(--on-surface); margin: 0; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font: 500 12px/16px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--on-surface-variant);
+  background: var(--surface-container); padding: 1px 6px; border-radius: var(--radius-sm); }
+pre { margin: 0; padding: 12px 16px; background: var(--surface-low); border: 1px solid var(--outline-variant-60);
+  border-radius: var(--radius); overflow: auto; font: 12px/18px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--on-surface); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.icon { width: 20px; height: 20px; fill: currentColor; flex: none; vertical-align: middle; }
+.icon-sm { width: 16px; height: 16px; }
+.icon-lg { width: 28px; height: 28px; }
+
+/* ---------- Tipografía ---------- */
+.headline-lg { font-size: 32px; line-height: 40px; font-weight: 600; color: var(--on-surface); }
+.headline-md { font-size: 28px; line-height: 36px; font-weight: 600; color: var(--on-surface); }
+.title-lg { font-size: 22px; line-height: 28px; font-weight: 500; color: var(--on-surface); }
+.body-lg { font-size: 16px; line-height: 24px; letter-spacing: .03em; }
+.label-lg { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--on-surface); }
+.label-md { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .04em; }
+.section-label { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--on-surface-variant); margin: 24px 0 10px; }
+.muted { color: var(--on-surface-variant); }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; color: var(--primary); }
+.brand .icon { width: 28px; height: 28px; }
+.brand small { font-size: 12px; font-weight: 500; color: var(--on-surface-variant); letter-spacing: .04em; }
+
+/* ---------- Tarjetas ---------- */
+.card { background: var(--surface-lowest); border: 1px solid var(--outline-variant-60); border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-1); padding: 24px; }
+.card + .card { margin-top: 16px; }
+.card-outline { background: var(--surface-low); border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); padding: 16px; }
+.card-tip { background: var(--secondary-fixed); color: var(--on-secondary-fixed-variant); border-radius: var(--radius-lg); padding: 16px; }
+.card-danger { border-color: var(--alert-border); }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.card-head h2 { font-size: 18px; line-height: 24px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Botones (píldora) ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 20px;
+  border-radius: var(--radius-full); border: 1px solid var(--outline-variant); background: var(--surface-lowest);
+  color: var(--primary); font: 500 14px/20px var(--font); cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition: background-color .15s, box-shadow .15s, border-color .15s; }
+.btn:hover { background: var(--primary-08); text-decoration: none; }
+.btn:active { background: var(--primary-fixed); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn .icon { width: 18px; height: 18px; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn-primary:hover { background: var(--primary-container); border-color: var(--primary-container); }
+.btn-danger { background: var(--error); border-color: var(--error); color: var(--on-error); }
+.btn-danger:hover { background: var(--on-error-container); border-color: var(--on-error-container); }
+.btn-danger-outline { color: var(--error); border-color: var(--alert-border); }
+.btn-danger-outline:hover { background: var(--alert-bg); }
+.btn-text { border-color: transparent; background: transparent; padding-inline: 12px; }
+.btn-sm { min-height: 32px; padding: 4px 14px; font-size: 13px; }
+.btn-block { width: 100%; }
+.btn-icon { width: 40px; padding: 0; }
+
+/* ---------- Píldoras / insignias ---------- */
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--radius-full);
+  font-size: 11px; line-height: 14px; font-weight: 700; white-space: nowrap; background: var(--primary-fixed); color: var(--on-primary-fixed-variant); }
+.pill .icon { width: 14px; height: 14px; }
+.pill-neutral { background: var(--surface-container); color: var(--on-surface-variant); }
+.pill-blue { background: var(--secondary-fixed); color: var(--on-secondary-fixed-variant); }
+.pill-error { background: var(--error-container); color: var(--on-error-container); }
+.pill-warn { background: var(--warn-bg); color: var(--on-warn); }
+
+.status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 20px;
+  background: var(--status-pill-bg); border: 1px solid var(--status-pill-border); font-size: 13px; font-weight: 600; color: var(--on-surface); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-ok); flex: none; }
+.dot-wait { background: var(--status-wait); }
+.dot-off { background: var(--status-off); }
+
+/* ---------- Avisos ---------- */
+.alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: var(--radius-md);
+  font-size: 14px; line-height: 20px; margin-bottom: 16px; }
+.alert .icon { margin-top: 0; }
+.alert-ok { background: var(--primary-fixed); color: var(--on-primary-fixed-variant); }
+.alert-info { background: var(--secondary-fixed); color: var(--on-secondary-fixed-variant); }
+.alert-error { background: var(--error-container); color: var(--on-error-container); }
+.alert-warn { background: var(--warn-bg); color: var(--on-warn); border: 1px solid var(--warn-border); }
+.alert-offline { background: var(--alert-bg); border: 1px solid var(--alert-border); border-left: 4px solid var(--status-off); color: var(--on-surface); }
+
+/* ---------- Formularios ---------- */
+.form-field { display: block; margin-bottom: 16px; }
+.form-field > span { display: block; font-size: 14px; font-weight: 500; color: var(--on-surface); margin-bottom: 6px; }
+.form-field > small { display: block; margin-top: 4px; font-size: 12px; }
+.input, .form-field input:not([type=checkbox]):not([type=range]), .form-field textarea, textarea.input {
+  display: block; width: 100%; padding: 10px 12px; font: 400 14px/20px var(--font); color: var(--on-surface);
+  background: var(--surface-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius); transition: border-color .15s, box-shadow .15s; }
+.input:focus, .form-field input:focus, .form-field textarea:focus, textarea.input:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+textarea.input, .form-field textarea { resize: vertical; min-height: 72px; }
+.input-error { border-color: var(--error) !important; box-shadow: 0 0 0 1px var(--error) !important; }
+.field-error { display: flex; align-items: center; gap: 4px; color: var(--error); font-size: 12px; font-weight: 500; margin-top: 4px; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+/* Interruptor (toggle) estilo Material 3 — es un checkbox con role="switch" */
+.switch { position: relative; display: inline-flex; flex: none; width: 52px; height: 32px; cursor: pointer; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: inherit; z-index: 1; }
+.switch .track { position: absolute; inset: 0; border-radius: var(--radius-full); background: var(--surface-highest);
+  border: 2px solid var(--outline); transition: background-color .2s, border-color .2s; }
+.switch .thumb { position: absolute; top: 50%; left: 8px; width: 16px; height: 16px; border-radius: 50%; background: var(--outline);
+  transform: translateY(-50%); transition: left .2s, width .2s, height .2s, background-color .2s;
+  display: flex; align-items: center; justify-content: center; }
+.switch .thumb .icon { width: 16px; height: 16px; fill: var(--primary); opacity: 0; transition: opacity .2s; }
+.switch input:checked + .track { background: var(--primary); border-color: var(--primary); }
+.switch input:checked + .track .thumb { left: 24px; width: 24px; height: 24px; background: var(--on-primary); }
+.switch input:checked + .track .thumb .icon { opacity: 1; }
+.switch:active .thumb { width: 28px; height: 28px; }
+.switch input:focus-visible + .track { outline: 2px solid var(--primary); outline-offset: 2px; }
+.switch input:disabled + .track { opacity: .38; }
+.switch:has(input:disabled) { cursor: not-allowed; }
+
+/* Deslizador */
+.range { display: flex; align-items: center; gap: 12px; min-width: 240px; }
+.range input[type=range] { flex: 1; accent-color: var(--primary); height: 4px; }
+.range output { min-width: 52px; justify-content: center; }
+
+/* ---------- Tablas ---------- */
+.table-wrap { overflow-x: auto; margin: 0 -24px; }
+table.table { width: 100%; border-collapse: collapse; }
+.table th { background: var(--surface-low); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--on-surface-variant); text-align: left; padding: 10px 16px; white-space: nowrap; }
+.table th:first-child, .table td:first-child { padding-left: 24px; }
+.table th:last-child, .table td:last-child { padding-right: 24px; }
+.table td { padding: 12px 16px; border-bottom: 1px solid var(--outline-variant-60); vertical-align: middle; color: var(--on-surface); }
+.table tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: var(--surface-low); }
+.table .num { text-align: right; }
+.nowrap { white-space: nowrap; }
+
+/* ---------- Diálogo ---------- */
+dialog.dialog { border: 0; padding: 0; border-radius: var(--radius-xl); background: var(--surface-lowest); color: var(--on-surface-variant);
+  width: min(520px, calc(100vw - 32px)); box-shadow: 0 8px 32px rgba(0, 0, 0, .18); }
+dialog.dialog::backdrop { background: var(--scrim-40); }
+.dialog-body { padding: 24px; }
+.dialog-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--primary-fixed); color: var(--on-primary-fixed-variant); margin-bottom: 16px; }
+.dialog-icon.danger { background: var(--error-container); color: var(--on-error-container); }
+.dialog h2 { font-size: 22px; line-height: 28px; font-weight: 500; margin-bottom: 8px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 24px 24px; flex-wrap: wrap; }
+
+/* ---------- Avatar ---------- */
+.avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-fixed); color: var(--on-primary-fixed-variant); font-weight: 600; font-size: 15px; text-transform: uppercase; }
+.avatar-lg { width: 64px; height: 64px; font-size: 24px; }
+.avatar-muted { background: var(--surface-container); color: var(--on-surface-variant); }

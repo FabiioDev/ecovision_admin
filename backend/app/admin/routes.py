@@ -15,11 +15,14 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
+from .. import __version__
 from ..core.config import get_settings
 from ..core.rate_limit import SlidingWindowLimiter
 from ..core.security import hash_password, needs_rehash, verify_password
-from ..flags.catalog import DEFAULT_CONFIG, FLAG_SPECS, GROUPS, diff, parse_form, to_form_values
+from ..flags.catalog import (DEFAULT_CONFIG, GROUP_UI, GROUPS, VISIBLE_SPECS, diff, parse_form,
+                             to_form_values)
 from ..services import admins, audit, config_store, users
 from . import session as sess
 from .session import CurrentAdmin, current_admin, require
@@ -46,14 +49,38 @@ def _fmt_dt(value: Any) -> str:
         return str(value)
 
 
+def _icon(name: str, cls: str = "") -> Markup:
+    """Icono del sprite static/img/icons.svg (solo nombres fijos escritos en las plantillas)."""
+    return Markup(f'<svg class="icon {escape(cls)}" aria-hidden="true" focusable="false">'
+                  f'<use href="/admin/static/img/icons.svg#i-{escape(name)}"></use></svg>')
+
+
+def _initials(text: Optional[str]) -> str:
+    parts = [p for p in (text or "").replace("@", " ").replace(".", " ").split() if p]
+    return "".join(p[0] for p in parts[:2]).upper() or "?"
+
+
 templates.env.filters["dt"] = _fmt_dt
 templates.env.filters["tojson_pretty"] = lambda v: json.dumps(v, ensure_ascii=False, indent=2, default=str)
+templates.env.filters["initials"] = _initials
+templates.env.globals["icon"] = _icon
+templates.env.globals["app_version"] = __version__
+
+
+def _published_status() -> Optional[dict]:
+    """Número del último cambio publicado y modo mantenimiento para la barra superior (no rompe la página si falla)."""
+    try:
+        snap = config_store.get_current_cached(get_settings().config_cache_ttl_s)
+    except Exception:  # noqa: BLE001
+        return None
+    return {"version": snap.version, "maintenance": snap.config.maintenance_mode}
 
 
 def render(request: Request, name: str, ctx: Optional[dict] = None,
            admin: Optional[CurrentAdmin] = None, status_code: int = 200) -> HTMLResponse:
     flash = sess.read_flash(request)
-    context = {"admin": admin, "flash": flash, **(ctx or {})}
+    context = {"admin": admin, "flash": flash,
+               "status": _published_status() if admin else None, **(ctx or {})}
     resp = templates.TemplateResponse(request, name, context, status_code=status_code)
     if flash:
         sess.clear_flash(resp)
@@ -133,17 +160,34 @@ def logout(request: Request, csrf_token: str = Form(""),
 # --------------------------------------------------------------------------- #
 # Config de la app (flags y parámetros)
 # --------------------------------------------------------------------------- #
+def _as_attr(spec, value) -> str:
+    """Valor publicado como texto para data-published (lo compara admin.js)."""
+    if spec.kind == "bool":
+        return "1" if value else "0"
+    return "" if value is None else str(value)
+
+
 def _config_page(request: Request, admin: CurrentAdmin, values: dict, errors: dict,
-                 status_code: int = 200) -> HTMLResponse:
+                 status_code: int = 200, notice: Optional[str] = None) -> HTMLResponse:
     snap = config_store.get_current()
+    published_form = to_form_values(snap.config)
+    defaults = to_form_values(DEFAULT_CONFIG)
+    published = {s.key: _as_attr(s, published_form[s.key]) for s in VISIBLE_SPECS}
+    modified = {g: sum(1 for s in VISIBLE_SPECS if s.group == g and published_form[s.key] != defaults[s.key])
+                for g in GROUPS}
     return render(request, "config.html", {
         "groups": GROUPS,
-        "specs": FLAG_SPECS,
+        "group_ui": GROUP_UI,
+        "specs": VISIBLE_SPECS,
         "values": values,
         "errors": errors,
-        "defaults": to_form_values(DEFAULT_CONFIG),
+        "defaults": defaults,
+        "published": published,
+        "published_form": published_form,
+        "modified": modified,
         "snapshot": snap,
         "versions": config_store.list_versions(20),
+        "notice": notice,
     }, admin=admin, status_code=status_code)
 
 
@@ -157,9 +201,14 @@ def config_view(request: Request, admin: CurrentAdmin = Depends(current_admin)):
 async def config_save(request: Request, admin: CurrentAdmin = Depends(require("editor"))):
     form = await request.form()
     sess.check_csrf(admin, form.get("csrf_token"))
-    cfg, values, errors = parse_form(form)
+    published = await run_in_threadpool(config_store.get_current)
+    cfg, values, errors = parse_form(form, published.config)
     if cfg is None:
         return await run_in_threadpool(_config_page, request, admin, values, errors, 422)
+    # El admin debe confirmar explícitamente la publicación (diálogo o casilla sin JS)
+    if form.get("confirmed") != "1":
+        return await run_in_threadpool(_config_page, request, admin, values, {}, 422,
+                                       "Confirma la publicación para aplicar los cambios.")
 
     def _save():
         current = config_store.get_current()
@@ -176,7 +225,7 @@ async def config_save(request: Request, admin: CurrentAdmin = Depends(require("e
     if snap is None:
         return redirect("/admin/config", "No hay cambios que guardar.", "info")
     return redirect("/admin/config",
-                    f"Config guardada: versión {snap.version} ({len(changes)} cambio(s)).")
+                    f"Config publicada: cambio #{snap.version} ({len(changes)} valor(es) modificado(s)).")
 
 
 @router.post("/config/reset")
@@ -187,14 +236,14 @@ def config_reset(request: Request, csrf_token: str = Form(""),
     audit.record(admin.username, "config.reset", f"version:{snap.version}",
                  {"changes": diff(previous, snap.config)}, sess.client_ip(request))
     return redirect("/admin/config",
-                    f"Valores por defecto restablecidos (versión {snap.version}).")
+                    f"Valores por defecto restablecidos (cambio #{snap.version}).")
 
 
 @router.get("/config/versions/{version}")
 def config_version(version: int, request: Request, admin: CurrentAdmin = Depends(current_admin)):
     data = config_store.get_version(version)
     if data is None:
-        return redirect("/admin/config", f"La versión {version} no existe.", "error")
+        return redirect("/admin/config", f"El cambio #{version} no existe.", "error")
     return render(request, "config_version.html", {"v": data}, admin=admin)
 
 
@@ -204,13 +253,13 @@ def config_rollback(version: int, request: Request, csrf_token: str = Form(""),
     sess.check_csrf(admin, csrf_token)
     result = config_store.rollback(version, admin.username)
     if result is None:
-        return redirect("/admin/config", f"La versión {version} no existe.", "error")
+        return redirect("/admin/config", f"El cambio #{version} no existe.", "error")
     snap, previous = result
     audit.record(admin.username, "config.rollback", f"version:{snap.version}",
                  {"from_version": version, "changes": diff(previous, snap.config)},
                  sess.client_ip(request))
     return redirect("/admin/config",
-                    f"Restaurada la versión {version} como versión {snap.version}.")
+                    f"Restaurada la config del cambio #{version} (nuevo cambio #{snap.version}).")
 
 
 # --------------------------------------------------------------------------- #

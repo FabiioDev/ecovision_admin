@@ -1,17 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Nuevo usuario{% endblock %}
+{% block heading %}Nuevo usuario{% endblock %}
 {% block content %}
-<p><a href="/admin/users">← Usuarios</a></p>
-<div class="card narrow">
-  <h1>Nuevo usuario</h1>
-  <p class="muted">Crea una cuenta de correo/contraseña en Firebase Authentication.</p>
-  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<a class="back-link" href="/admin/users">{{ icon('arrow_back', 'icon-sm') }}Usuarios</a>
+<div class="page-head">
+  <div>
+    <div class="section-label">Usuarios</div>
+    <h1 class="headline-lg">Nuevo usuario</h1>
+    <p class="muted">Crea una cuenta de correo y contraseña en Firebase Authentication.</p>
+  </div>
+</div>
+<div class="card login-card">
+  {% if error %}<div class="alert alert-error">{{ icon('error') }}<span>{{ error }}</span></div>{% endif %}
   <form method="post" action="/admin/users/new" autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ admin.csrf }}">
-    <label>Correo <input type="email" name="email" value="{{ values.email or '' }}" required></label>
-    <label>Nombre <input name="display_name" value="{{ values.display_name or '' }}" maxlength="100"></label>
-    <label>Contraseña inicial <input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
-    <button class="btn btn-primary" type="submit">Crear usuario</button>
+    <label class="form-field"><span>Correo</span><input type="email" name="email" value="{{ values.email or '' }}" required></label>
+    <label class="form-field"><span>Nombre</span><input name="display_name" value="{{ values.display_name or '' }}" maxlength="100"></label>
+    <label class="form-field"><span>Contraseña inicial</span>
+      <input type="password" name="password" minlength="6" required autocomplete="new-password">
+      <small class="muted">Mínimo 6 caracteres. Compártela con el usuario por un canal seguro.</small>
+    </label>
+    <div class="actions-row">
+      <button class="btn btn-primary" type="submit">{{ icon('add') }}Crear usuario</button>
+      <a class="btn" href="/admin/users">Cancelar</a>
+    </div>
   </form>
 </div>
 {% endblock %}

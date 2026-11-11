@@ -1,30 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Auditoría{% endblock %}
+{% block heading %}Auditoría{% endblock %}
 {% block content %}
-<h1>Auditoría</h1>
+<div class="page-head">
+  <div>
+    <div class="section-label">Registro de acciones</div>
+    <h1 class="headline-lg">Auditoría</h1>
+    <p class="muted">Cada inicio de sesión y cada cambio hecho desde el panel queda registrado aquí.</p>
+  </div>
+</div>
+
 <div class="card">
 {% if entries %}
-  <table>
-    <thead><tr><th>Fecha</th><th>Admin</th><th>Acción</th><th>Objetivo</th><th>Detalles</th><th>IP</th></tr></thead>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Fecha</th><th>Admin</th><th>Acción</th><th class="hide-sm">Objetivo</th><th>Detalles</th><th class="hide-sm">IP</th></tr></thead>
     <tbody>
     {% for e in entries %}
+      {% set a = e.action or '' %}
       <tr>
         <td class="nowrap">{{ e.ts | dt }}</td>
-        <td>{{ e.actor }}</td>
-        <td title="{{ e.action }}">{{ e.action_label }}</td>
-        <td><code>{{ e.target }}</code></td>
-        <td>{% if e.details %}<details><summary>ver</summary><pre>{{ e.details | tojson_pretty }}</pre></details>{% endif %}</td>
-        <td><small>{{ e.ip }}</small></td>
+        <td><strong>{{ e.actor }}</strong></td>
+        <td>
+          {% if a == 'admin.login_failed' or a == 'user.delete' %}<span class="pill pill-error" title="{{ a }}">{{ e.action_label }}</span>
+          {% elif a.startswith('config.') %}<span class="pill" title="{{ a }}">{{ e.action_label }}</span>
+          {% elif a.startswith('user.') %}<span class="pill pill-blue" title="{{ a }}">{{ e.action_label }}</span>
+          {% else %}<span class="pill pill-neutral" title="{{ a }}">{{ e.action_label }}</span>{% endif %}
+        </td>
+        <td class="hide-sm"><code>{{ e.target or '—' }}</code></td>
+        <td>{% if e.details %}<details class="audit-details"><summary>Ver</summary><pre>{{ e.details | tojson_pretty }}</pre></details>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="hide-sm muted">{{ e.ip }}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
 {% else %}
-  <p class="muted">Sin registros.</p>
+  <div class="empty muted">{{ icon('history') }}<div>Aún no hay registros.</div></div>
 {% endif %}
 </div>
+
 <div class="pager">
-  {% if not is_first %}<a href="/admin/audit">« Más recientes</a>{% endif %}
-  {% if next_cursor %}<a href="/admin/audit?cursor={{ next_cursor | urlencode }}">Anteriores »</a>{% endif %}
+  <span>{% if not is_first %}<a class="btn" href="/admin/audit">{{ icon('arrow_back') }}Más recientes</a>{% endif %}</span>
+  <span>{% if next_cursor %}<a class="btn" href="/admin/audit?cursor={{ next_cursor | urlencode }}">Anteriores{{ icon('chevron_right') }}</a>{% endif %}</span>
 </div>
 {% endblock %}
