@@ -1,0 +1,117 @@
+/* Demo web EcoVision SV. Tokens y componentes base en /demo/assets/css/ecovision.css
+   (los mismos del panel, según DESIGN.md). Sin iconos. */
+
+html { scroll-behavior: smooth; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------- Barra superior ---------- */
+.demo-top { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--outline-variant-60); }
+.demo-top-inner { max-width: 1200px; margin: 0 auto; height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 24px; }
+.demo-top .brand { gap: 10px; }
+.demo-top .brand:hover { text-decoration: none; }
+.demo-nav { display: flex; gap: 4px; flex: 1; }
+.demo-nav a { padding: 8px 14px; border-radius: var(--radius-full); color: var(--on-surface-variant); font-weight: 500; }
+.demo-nav a:hover { background: var(--surface-container); text-decoration: none; }
+.status-pill[data-estado="ok"] .dot { background: var(--status-ok); }
+.status-pill[data-estado="cargando"] .dot { background: var(--status-wait); }
+.status-pill[data-estado="off"] .dot, .status-pill[data-estado="error"] .dot { background: var(--status-off); }
+
+/* ---------- Contenido ---------- */
+.demo-main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; flex: 1; }
+.demo-hero { max-width: 760px; margin-bottom: 24px; }
+.demo-hero .section-label { margin: 0 0 8px; color: var(--primary); }
+.demo-hero p { margin: 12px 0 0; }
+.demo-section { scroll-margin-top: 80px; margin-bottom: 40px; }
+.demo-section > .section-label { margin-top: 0; }
+.demo-off { max-width: 760px; }
+.demo-off h2 { margin-bottom: 8px; }
+
+.demo-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.demo-grid .card + .card { margin-top: 0; }
+
+/* Visor */
+.marco { position: relative; display: flex; align-items: center; justify-content: center; min-height: 360px;
+  border-radius: var(--radius-lg); background: var(--surface-low); border: 2px dashed var(--outline-variant); overflow: hidden; }
+.marco.arrastrando { border-color: var(--primary); background: var(--primary-08); }
+.marco.con-imagen { border-style: solid; border-color: var(--outline-variant-60); background: var(--surface-container); }
+.vacio { text-align: center; padding: 24px; }
+.vacio p { margin: 4px 0; }
+.marco video, .marco canvas { display: block; max-width: 100%; max-height: 70vh; }
+.marco [hidden] { display: none; }
+.cargando { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: rgba(248, 249, 250, .78); color: var(--on-surface); font-weight: 600; }
+.cargando[hidden] { display: none; }
+.barra-progreso { width: 160px; height: 4px; border-radius: var(--radius-full); background: var(--primary-20); overflow: hidden; }
+.barra-progreso span { display: block; width: 40%; height: 100%; background: var(--primary); border-radius: inherit; animation: progreso 1.1s ease-in-out infinite; }
+@keyframes progreso { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .barra-progreso span { animation: none; width: 100%; } html { scroll-behavior: auto; } }
+
+.controles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.controles [hidden] { display: none; }
+.umbral { margin-top: 20px; }
+.umbral .range { margin: 6px 0 4px; min-width: 0; }
+.umbral small { display: block; font-size: 12px; }
+#aviso { margin: 16px 0 0; }
+#aviso[hidden] { display: none; }
+
+/* Resultados */
+.demo-resultados .card-head { margin-bottom: 8px; }
+.demo-resultados [hidden] { display: none; }
+.detecciones { list-style: none; margin: 0; padding: 0; }
+.deteccion { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 10px 8px;
+  border-radius: var(--radius-md); cursor: default; }
+.deteccion:hover, .deteccion:focus-visible { background: var(--surface-low); }
+.deteccion .chip { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  color: #FFFFFF; font-weight: 700; font-size: 13px; }
+.deteccion .nombre { color: var(--on-surface); font-weight: 600; }
+.deteccion .confianza { color: var(--on-surface); font-weight: 600; font-variant-numeric: tabular-nums; }
+.consejos { margin-top: 12px; border-top: 1px solid var(--outline-variant-60); }
+.consejos .section-label { margin: 16px 0 8px; }
+.consejo { margin-bottom: 10px; }
+.consejo strong { color: var(--on-surface); }
+.consejo p { margin: 2px 0 0; }
+.metricas { display: flex; gap: 24px; margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--outline-variant-60); }
+.metricas dt { font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.metricas dd { margin: 2px 0 0; color: var(--on-surface); font-weight: 600; }
+
+/* Cómo se usa */
+.pasos { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pasos li { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-lowest); }
+.pasos strong { color: var(--on-surface); }
+.pasos p { margin: 4px 0 0; }
+.paso-num { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-fixed); color: var(--on-primary-fixed-variant); font-weight: 700; }
+
+/* Acerca de */
+.about { max-width: 880px; }
+.about > p { margin: 8px 0; }
+.about .title-lg { margin: 0; color: var(--primary); font-weight: 700; }
+.about h3 { font-size: 16px; line-height: 24px; font-weight: 600; margin: 24px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.categorias { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.categoria { padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-low); border: 1px solid var(--outline-variant-60); }
+.categoria strong { color: var(--on-surface); }
+.categoria p { margin: 4px 0 0; }
+.tecnologias { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+.tecnologias dt { color: var(--on-surface); font-weight: 600; }
+.tecnologias dd { margin: 0; }
+
+.demo-foot { text-align: center; padding: 16px 24px 24px; font-size: 12px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 960px) {
+  .demo-grid { grid-template-columns: minmax(0, 1fr); }
+  .pasos { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .demo-top-inner { height: auto; min-height: 56px; padding: 8px 16px; flex-wrap: wrap; gap: 4px 12px; }
+  .demo-top .brand { font-size: 18px; flex: 1; }
+  .demo-nav { order: 3; flex-basis: 100%; margin: 0 -10px; overflow-x: auto; }
+  .demo-main { padding: 20px 16px 32px; }
+  .headline-lg { font-size: 26px; line-height: 32px; }
+  .card { padding: 16px; }
+  .marco { min-height: 260px; }
+  .controles .btn { flex: 1 1 140px; }
+  .tecnologias { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .tecnologias dd { margin-bottom: 8px; }
+}

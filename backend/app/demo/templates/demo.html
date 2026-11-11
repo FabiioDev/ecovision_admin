@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Prueba el detector de residuos de EcoVision SV desde el navegador, sin registrarte.">
+  <title>Demo · EcoVision SV</title>
+  <link rel="preload" href="/demo/assets/fonts/BeVietnamPro-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/demo/assets/css/ecovision.css">
+  <link rel="stylesheet" href="/demo/static/demo.css">
+  {% if not reason %}<script src="/demo/static/demo.js" defer></script>{% endif %}
+</head>
+<body>
+{# Demo aislada del panel: sin enlaces a /admin. Sin iconos (solo estilos de DESIGN.md). #}
+<header class="demo-top">
+  <div class="demo-top-inner">
+    <a class="brand" href="/demo">EcoVision SV <span class="pill pill-blue">Demo web</span></a>
+    <nav class="demo-nav" aria-label="Secciones">
+      <a href="#probar">Probar</a>
+      <a href="#como-se-usa">Cómo se usa</a>
+      <a href="#acerca">Acerca de</a>
+    </nav>
+    <span class="status-pill" id="estado" data-estado="{{ 'off' if reason else 'cargando' }}">
+      <span class="dot {{ 'dot-off' if reason else 'dot-wait' }}"></span>
+      <span id="estado-texto">{{ 'No disponible' if reason else 'Comprobando el modelo…' }}</span>
+    </span>
+  </div>
+</header>
+
+<main class="demo-main">
+
+  <section class="demo-hero">
+    <div class="section-label">Clasificación de residuos con IA</div>
+    <h1 class="headline-lg">Prueba el detector de EcoVision SV</h1>
+    <p class="body-lg">Sube una foto o usa la cámara: el modelo marca los residuos que encuentra y te dice a qué
+      categoría pertenece cada uno. No necesitas cuenta y las fotos no se guardan.</p>
+  </section>
+
+  <section id="probar" class="demo-section">
+  {% if reason %}
+    <div class="card demo-off">
+      <h2 class="title-lg">{{ 'En mantenimiento' if maintenance else 'Demo no disponible' }}</h2>
+      <p>{{ reason }}</p>
+      <p class="muted">Mientras tanto, puedes leer cómo funciona el proyecto más abajo.</p>
+    </div>
+  {% else %}
+    <div class="demo-grid" id="demo" data-cfg='{{ client_cfg | tojson }}'>
+      <div class="card demo-visor">
+        <div class="marco" id="marco">
+          <div class="vacio" id="vacio">
+            <p class="title-lg">Sube una foto o abre la cámara</p>
+            <p>También puedes arrastrar una imagen aquí.</p>
+          </div>
+          <video id="video" playsinline muted hidden></video>
+          <canvas id="lienzo" hidden></canvas>
+          <div class="cargando" id="cargando" hidden>
+            <div class="barra-progreso"><span></span></div>
+            <p>Analizando…</p>
+          </div>
+        </div>
+
+        <div class="controles">
+          <button class="btn btn-primary" id="btn-archivo" type="button">Elegir imagen</button>
+          <button class="btn" id="btn-camara" type="button">Abrir cámara</button>
+          <button class="btn btn-primary" id="btn-capturar" type="button" hidden>Capturar</button>
+          <button class="btn" id="btn-cambiar" type="button" hidden>Girar cámara</button>
+          <button class="btn btn-text" id="btn-cerrar-camara" type="button" hidden>Cerrar cámara</button>
+          <input type="file" id="input-archivo" accept="image/jpeg,image/png,image/webp" hidden>
+        </div>
+
+        <div class="umbral">
+          <label class="label-lg" for="umbral">Confianza mínima</label>
+          <div class="range">
+            <input type="range" id="umbral" min="{{ client_cfg.query_threshold }}" max="0.9" step="0.05" value="{{ score_threshold }}">
+            <output class="pill" id="umbral-valor" for="umbral">{{ '%.2f' | format(score_threshold) }}</output>
+          </div>
+          <small class="muted">Oculta las detecciones con menos confianza. Cambiarla no vuelve a enviar la foto.</small>
+        </div>
+
+        <div class="alert alert-error" id="aviso" role="alert" hidden></div>
+      </div>
+
+      <aside class="card demo-resultados" aria-label="Resultados" aria-live="polite">
+        <div class="card-head">
+          <h2>Resultados</h2>
+          <span class="pill pill-neutral" id="m-objetos" hidden>0 objetos</span>
+        </div>
+        <p class="muted" id="ficha-vacia">Todavía no hay nada que analizar.</p>
+        <ol class="detecciones" id="detecciones"></ol>
+        <div class="consejos" id="consejos" hidden>
+          <div class="section-label">Cómo reciclarlo</div>
+          <div id="consejos-lista"></div>
+        </div>
+        <dl class="metricas" id="metricas" hidden>
+          <div><dt>Tiempo del modelo</dt><dd id="m-latencia">—</dd></div>
+          <div><dt>Imagen</dt><dd id="m-tam">—</dd></div>
+        </dl>
+      </aside>
+    </div>
+  {% endif %}
+  </section>
+
+  <section id="como-se-usa" class="demo-section">
+    <h2 class="section-label">Cómo se usa</h2>
+    <ol class="pasos">
+      <li class="card-outline"><span class="paso-num">1</span>
+        <div><strong>Toma o elige una foto</strong><p>Usa la cámara del dispositivo o una imagen de tu galería. Funciona mejor con buena luz y el residuo bien visible.</p></div></li>
+      <li class="card-outline"><span class="paso-num">2</span>
+        <div><strong>El modelo la analiza</strong><p>La foto se envía al servidor, que detecta los residuos y los encierra en recuadros con su categoría y su nivel de confianza.</p></div></li>
+      <li class="card-outline"><span class="paso-num">3</span>
+        <div><strong>Recicla correctamente</strong><p>Revisa cada detección y sigue el consejo de su categoría para depositarla en el contenedor adecuado.</p></div></li>
+    </ol>
+    <p class="card-tip">En la app Android, además, puedes guardar tus detecciones en el historial y exportarlas.</p>
+  </section>
+
+  <section id="acerca" class="demo-section">
+    <h2 class="section-label">Acerca de EcoVision SV</h2>
+    <div class="card about">
+      <p class="title-lg">EcoVision SV</p>
+      <p class="body-lg">Clasificación de residuos con inteligencia artificial para un reciclaje correcto en El Salvador.</p>
+
+      <h3>El proyecto</h3>
+      <p>EcoVision SV es una herramienta de clasificación de residuos basada en inteligencia artificial,
+        diseñada para facilitar el reciclaje correcto en El Salvador. La app detecta y clasifica residuos
+        usando la cámara del dispositivo.</p>
+
+      <h3>Modelo de IA</h3>
+      <p><strong>EfficientDet D1 — TACO Dataset.</strong> Modelo de detección de objetos entrenado con el dataset
+        TACO (Trash Annotations in Context). Servido en Google Cloud Run.</p>
+      <div class="chips">
+        <span class="pill">6 clases</span><span class="pill">Entrada 640×640</span>
+        <span class="pill">Confianza ≥ {{ (score_threshold * 100) | round | int }}%</span>
+      </div>
+
+      <h3>Categorías</h3>
+      <div class="categorias" id="categorias">
+        <div class="categoria" data-cat="plastico"><strong>Plástico</strong><p>Deposita en el contenedor amarillo. Enjuaga el envase antes de reciclarlo para evitar contaminar otros materiales.</p></div>
+        <div class="categoria" data-cat="metal"><strong>Metal</strong><p>Los metales van en el contenedor amarillo. Aplasta las latas para ahorrar espacio y facilitar el transporte.</p></div>
+        <div class="categoria" data-cat="papel"><strong>Papel</strong><p>El papel limpio va en el contenedor azul. Si está sucio o mojado, descártalo como residuo general.</p></div>
+        <div class="categoria" data-cat="carton"><strong>Cartón</strong><p>Aplana las cajas antes de depositarlas en el contenedor azul. Retira cualquier cinta adhesiva o grapas metálicas.</p></div>
+        <div class="categoria" data-cat="vidrio"><strong>Vidrio</strong><p>Deposita en el contenedor verde. No mezcles vidrio plano (ventanas) con envases; tienen procesos distintos.</p></div>
+        <div class="categoria" data-cat="organico"><strong>Orgánico</strong><p>Va al compostaje o contenedor marrón/orgánico. Evita mezclar con plásticos para que la descomposición sea efectiva.</p></div>
+      </div>
+
+      <h3>Tecnologías</h3>
+      <dl class="tecnologias">
+        <dt>Entrenamiento</dt><dd>Google Colab y TensorFlow para preparar el dataset y entrenar EfficientDet D1.</dd>
+        <dt>Servidor</dt><dd>FastAPI en Google Cloud Run: el servicio de inferencia y este backend.</dd>
+        <dt>App</dt><dd>Android nativa en Java con Material Design 3, CameraX, Retrofit y Room.</dd>
+      </dl>
+
+      <h3>Privacidad</h3>
+      <p>La demo no guarda tus fotos: se envían al modelo, se analizan y se descartan.</p>
+
+      <h3>Créditos</h3>
+      <p>Desarrollado como proyecto universitario. Todos los derechos reservados.<br>
+        <a href="https://github.com/FabiioDev/EcoVision_SV" rel="noopener" target="_blank">github.com/FabiioDev/EcoVision_SV</a></p>
+    </div>
+  </section>
+</main>
+
+<footer class="demo-foot muted">EcoVision SV · Demo web</footer>
+</body>
+</html>

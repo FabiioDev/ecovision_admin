@@ -1,4 +1,4 @@
-# Backend EcoVision (API de la app + panel de administración)
+# Backend EcoVision (API de la app + demo web + panel de administración)
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 jinja2==3.1.4
@@ -9,3 +9,6 @@ itsdangerous==2.2.0
 argon2-cffi==23.1.0
 firebase-admin==6.6.0
 google-cloud-firestore==2.19.0
+# Cliente del servicio de inferencia (demo y Fase 4). google-auth y requests (ID token)
+# llegan como dependencias de firebase-admin.
+httpx==0.28.1

@@ -31,8 +31,31 @@ class Settings(BaseSettings):
     docs_enabled: bool = False
     log_level: str = "INFO"
 
+    # --- Servicio de inferencia (hoy lo usa la demo; en la Fase 4 también /api/v1/predict) ---
+    # URL base sin barra final, p. ej. https://ecovision-api-xxxx-uc.a.run.app
+    inference_url: str = ""
+    # Enviar un ID token de Google (audiencia = inference_url). Necesario cuando la
+    # inferencia sea privada (Fase 4); con el servicio público actual no estorba.
+    inference_use_id_token: bool = True
+    inference_timeout_s: float = Field(60, gt=0, le=300)
+
+    # --- Demo web pública (/demo) ---
+    demo_max_upload_mb: float = Field(5, gt=0, le=10)
+    # Peticiones de análisis por IP en la ventana (la app de demo filtra el umbral en el
+    # navegador, así que mover el deslizador no gasta peticiones)
+    demo_rate_limit: int = Field(10, ge=1)
+    demo_rate_window_s: int = Field(60, ge=10)
+    # Tope global por instancia y hora: limita el gasto aunque lleguen muchas IP distintas
+    demo_hourly_limit: int = Field(300, ge=1)
+
     @property
     def api_enabled(self) -> bool:
+        return self.role in ("all", "api")
+
+    @property
+    def demo_mounted(self) -> bool:
+        """La demo es pública como la API: se monta con ROLE=all o ROLE=api.
+        Además debe estar activada con la flag `demo_enabled` del panel."""
         return self.role in ("all", "api")
 
     @property
