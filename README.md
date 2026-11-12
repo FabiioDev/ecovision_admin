@@ -4,7 +4,9 @@ Servicio FastAPI de EcoVision SV (app Android que detecta residuos con un modelo
 EfficientDet D1). Se despliega en Google Cloud Run y reúne:
 
 - **API de la app** (`/api/v1`): configuración remota y feature flags (`GET /api/v1/config`
-  con `ETag`), configuración pública (mantenimiento y versión mínima) y estado del servicio.
+  con `ETag`), configuración pública (mantenimiento y versión mínima), detección
+  (`POST /api/v1/predict`, proxy hacia la inferencia con token de Firebase) y estado del
+  servicio (`GET /api/v1/health`, que además despierta la inferencia).
 - **Panel de administración** (`/admin`): login de administradores, flags y parámetros con
   historial de cambios (restaurar y restablecer), auditoría y gestión de usuarios de
   Firebase Authentication.
@@ -28,8 +30,10 @@ backend/
 │   ├── services/      Firestore, config versionada, auditoría, usuarios, inferencia
 │   ├── templates/     plantillas Jinja2 del panel
 │   └── static/        CSS, fuentes e iconos
+├── tests/             pruebas (pytest; sin GCP)
 ├── Dockerfile
 ├── requirements.txt
+├── requirements-dev.txt
 └── .env.example
 docs/openapi.yaml      contrato de la API (fuente de verdad)
 scripts/
@@ -72,6 +76,18 @@ la interfaz, nunca para desplegar):
 python scripts/dev_preview.py --demo
 ```
 
+## Pruebas
+
+Sin GCP: Firestore, Firebase Auth y la inferencia se simulan.
+
+```
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+`tests/` no se sube a Cloud Build ni entra en la imagen (`.gcloudignore`, `.dockerignore`).
+
 ## Variables de entorno
 
 Todas están descritas en `backend/.env.example`. Las principales:
@@ -85,7 +101,9 @@ Todas están descritas en `backend/.env.example`. Las principales:
 | `CONFIG_CACHE_TTL_S` | Segundos que `/api/v1/config` se sirve desde memoria. |
 | `CONFIG_REQUIRE_AUTH` | Exigir token de Firebase en `/api/v1/config`. |
 | `INFERENCE_URL` | URL del servicio de inferencia (sin barra final). |
-| `INFERENCE_USE_ID_TOKEN` | Llamar a la inferencia con ID token de la cuenta de servicio. |
+| `INFERENCE_USE_ID_TOKEN` | Llamar a la inferencia con ID token de la cuenta de servicio (obligatorio si es privada). |
+| `INFERENCE_TIMEOUT_S` | Tope de espera a la inferencia (115). La espera real es `request_timeout_s − 3` (flag del panel), para responder antes que la app. |
+| `PREDICT_*` | Tamaño máximo de imagen y límite de detecciones por usuario de `/api/v1/predict`. |
 | `DEMO_*` | Tamaño máximo y límites de peticiones de la demo. |
 
 Nunca se commitean `.env`, claves ni JSON de cuentas de servicio.
@@ -105,7 +123,10 @@ gcloud run deploy <SERVICIO> --source backend --region <REGION> \
 
 - `min-instances` en 0: sin costo fijo.
 - La cuenta de servicio necesita `roles/datastore.user`, `roles/firebaseauth.admin` y
-  `roles/secretmanager.secretAccessor` sobre el secreto.
+  `roles/secretmanager.secretAccessor` sobre el secreto, y `roles/run.invoker` sobre el
+  servicio de inferencia (que puede quedar privado con `--no-allow-unauthenticated`).
+- Timeouts: el `--timeout` del backend en Cloud Run (300 s por defecto) debe ser mayor que
+  `INFERENCE_TIMEOUT_S`.
 - Las reglas de seguridad de Firestore deben negar todo acceso de cliente: el backend usa
   el SDK de administrador, que no pasa por las reglas.
 
