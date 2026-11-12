@@ -14,6 +14,6 @@ venv/
 __pycache__/
 *.pyc
 
-# Modelo (pesado; se respalda fuera de git)
-inference/exported_model/
+# Servicio de inferencia: se versiona y despliega por separado (no va en este repo)
+/inference/
 exported_model/
