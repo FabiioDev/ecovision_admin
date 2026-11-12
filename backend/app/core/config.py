@@ -31,13 +31,23 @@ class Settings(BaseSettings):
     docs_enabled: bool = False
     log_level: str = "INFO"
 
-    # --- Servicio de inferencia (hoy lo usa la demo; en la Fase 4 también /api/v1/predict) ---
+    # --- Servicio de inferencia (demo y /api/v1/predict) ---
     # URL base sin barra final, p. ej. https://ecovision-api-xxxx-uc.a.run.app
     inference_url: str = ""
     # Enviar un ID token de Google (audiencia = inference_url). Necesario cuando la
-    # inferencia sea privada (Fase 4); con el servicio público actual no estorba.
+    # inferencia es privada (--no-allow-unauthenticated); con el servicio público no estorba.
     inference_use_id_token: bool = True
-    inference_timeout_s: float = Field(60, gt=0, le=300)
+    # TOPE de espera a la inferencia. La espera real de cada /predict sale de la flag
+    # request_timeout_s (services.inference.timeout_predict): request_timeout_s - 3, para
+    # responder antes que la app. 115 < 120 s, el timeout del servicio de inferencia.
+    inference_timeout_s: float = Field(115, gt=0, le=300)
+
+    # --- POST /api/v1/predict (app) ---
+    # La app envía JPEG 640x640 (< 1 MB); el margen cubre imágenes mayores.
+    predict_max_upload_mb: float = Field(5, gt=0, le=10)
+    # Peticiones por usuario (uid) en la ventana. Por instancia (core/rate_limit.py).
+    predict_rate_limit: int = Field(20, ge=1)
+    predict_rate_window_s: int = Field(60, ge=10)
 
     # --- Demo web pública (/demo) ---
     demo_max_upload_mb: float = Field(5, gt=0, le=10)

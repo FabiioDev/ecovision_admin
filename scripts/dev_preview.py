@@ -160,7 +160,7 @@ _FAKE = [  # dos cajas casi iguales para ver el NMS, y una de baja confianza
 ]
 
 
-async def _fake_predict(data, filename, content_type, umbral):
+async def _fake_predict(data, filename, content_type, umbral, timeout_s=None):
     import asyncio
     await asyncio.sleep(0.6)
     w = h = 640
@@ -170,7 +170,7 @@ async def _fake_predict(data, filename, content_type, umbral):
     return {"ancho": w, "alto": h, "umbral": umbral, "latencia_ms": 480.0, "detecciones": dets}
 
 
-async def _fake_health():
+async def _fake_health(timeout_s=None):
     return {"conectado": True, "clases": ["Plástico", "Metal", "Papel", "Cartón", "Vidrio", "Orgánico"]}
 
 

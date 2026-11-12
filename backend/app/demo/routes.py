@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..core.config import get_settings
 from ..core.rate_limit import SlidingWindowLimiter
+from ..core.uploads import ImagenInvalida, leer_imagen
 from ..flags.catalog import DEFAULT_CONFIG, SCORE_THRESHOLD_MIN, AppConfig
 from ..services import config_store, inference
 
@@ -34,7 +35,6 @@ router = APIRouter(prefix="/demo", include_in_schema=False)
 # Umbral con el que se consulta al modelo; el filtro real lo hace el deslizador.
 # Es el mínimo de score_threshold en el catálogo: el deslizador no baja de ahí.
 QUERY_THRESHOLD = SCORE_THRESHOLD_MIN
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 _settings = get_settings()
 _by_ip = SlidingWindowLimiter(_settings.demo_rate_limit, _settings.demo_rate_window_s)
@@ -119,21 +119,19 @@ async def demo_predict(request: Request, file: UploadFile = File(...)):
     if _global.blocked_for("all"):
         return _error(429, "La demo recibió muchas pruebas en la última hora. Vuelve a intentarlo más tarde.")
 
-    if (file.content_type or "").lower() not in ALLOWED_TYPES:
-        return _error(415, "Formato no admitido. Usa una imagen JPEG, PNG o WebP.")
-    max_bytes = int(settings.demo_max_upload_mb * 1024 * 1024)
-    data = await file.read(max_bytes + 1)
-    if not data:
-        return _error(400, "No se recibió ninguna imagen.")
-    if len(data) > max_bytes:
-        return _error(413, f"La imagen supera {settings.demo_max_upload_mb:g} MB.")
+    try:
+        data = await leer_imagen(file, settings.demo_max_upload_mb)
+    except ImagenInvalida as exc:
+        return _error(exc.status, exc.message)
 
     # Cuenta la petición antes de llamar al modelo (también si falla: cuesta igual)
     _by_ip.hit(ip)
     _global.hit("all")
     try:
+        # Misma espera que la app (flag request_timeout_s), ver services/inference.py
         result = await inference.predict(data, file.filename or "captura.jpg",
-                                         file.content_type, QUERY_THRESHOLD)
+                                         file.content_type, QUERY_THRESHOLD,
+                                         inference.timeout_predict(cfg.request_timeout_s))
     except inference.InferenceError as exc:
         return _error(exc.status, exc.message)
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
