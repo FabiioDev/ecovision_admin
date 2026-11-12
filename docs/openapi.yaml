@@ -10,7 +10,8 @@ info:
       - Fase 1 (implementado): health, config pública y config completa.
       - Demo web (implementada, HTML): `/demo` y `/demo/predict`, controladas por `demo_enabled`.
       - Fase 3: `/me`; `GET /config` pasa a exigir token (CONFIG_REQUIRE_AUTH=true).
-      - Fase 4: `/predict` como proxy hacia el servicio privado `inference`.
+      - Fase 4 (implementado): `/predict` como proxy hacia el servicio `inference` (privado
+        cuando la app ya use el backend) y `/health` con el estado de la inferencia.
       - Fase 5: `/images*` (subida con URL firmada).
 
     Los nombres del esquema de inferencia se conservan en español
@@ -32,8 +33,13 @@ paths:
   /api/v1/health:
     get:
       tags: [app]
-      summary: Estado del backend
-      description: Sin autenticación. En la Fase 4 también despertará el servicio de inferencia.
+      summary: Estado del backend y de la inferencia
+      description: |
+        Sin autenticación. Responde en ~2 s como máximo y, de paso, despierta el servicio de
+        inferencia (arranque en frío): si está dormido, `inferencia` es `despertando` y la
+        comprobación sigue en segundo plano; la app vuelve a consultar más tarde.
+        `inferencia: lista` se guarda unos segundos para no consultar el modelo en cada
+        llamada. `status` describe solo el backend.
       operationId: health
       security: []
       responses:
@@ -107,6 +113,69 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/ConfigUnavailable" }
 
+  /api/v1/predict:
+    post:
+      tags: [app]
+      summary: Detectar residuos en una imagen (proxy hacia `inference`)
+      description: |
+        Reenvía la imagen al servicio de inferencia (con un ID token de la cuenta de servicio
+        del backend) y devuelve su respuesta SIN modificarla: mismo esquema que el
+        `POST /predict` de la inferencia. La app aplica después el NMS y `max_detections`.
+        No guarda la imagen ni la registra.
+
+        Comprobaciones del servidor (las flags no son seguridad):
+          - token de Firebase válido y usuario no desactivado (401/403);
+          - `maintenance_mode=true` ⇒ 503 con `maintenance_message` en `detail`;
+          - límite de peticiones por usuario (429, cabecera `Retry-After`);
+          - tipo (JPEG, PNG o WebP) y tamaño máximo de la imagen (415/413/400).
+
+        Timeout: el backend espera a la inferencia `request_timeout_s − 3` s (mínimo 2 s,
+        tope `INFERENCE_TIMEOUT_S`), para responder 504 antes de que la app, que espera
+        `request_timeout_s`, corte la conexión. Si la config no se puede leer, se usan los
+        valores por defecto.
+      operationId: predict
+      security:
+        - firebaseBearer: []
+      parameters:
+        - in: query
+          name: umbral
+          required: false
+          description: Confianza mínima. Se recorta a [0.3, 1]; sin valor, 0.3.
+          schema: { type: number, minimum: 0.3, maximum: 1, default: 0.3 }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Imagen JPEG, PNG o WebP (la app envía JPEG 640×640).
+      responses:
+        "200":
+          description: Detecciones (respuesta de la inferencia, sin cambios)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prediccion" }
+        "400": { description: No se recibió ninguna imagen, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { description: La imagen supera el tamaño máximo (PREDICT_MAX_UPLOAD_MB), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "415": { description: Formato de imagen no admitido, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429":
+          description: Demasiadas peticiones de este usuario (PREDICT_RATE_LIMIT por PREDICT_RATE_WINDOW_S)
+          headers:
+            Retry-After: { schema: { type: integer }, description: Segundos de espera }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502": { description: No se pudo contactar la inferencia o esta falló, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: En mantenimiento (`detail` = maintenance_message) o inferencia sin configurar, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "504": { description: La inferencia tardó más que el timeout, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+
 components:
   securitySchemes:
     firebaseBearer:
@@ -141,11 +210,19 @@ components:
 
     Health:
       type: object
-      required: [status, service, version]
+      required: [status, service, version, inferencia]
       properties:
-        status: { type: string, example: ok }
+        status: { type: string, example: ok, description: Estado del backend (siempre ok si responde) }
         service: { type: string, example: backend }
         version: { type: string, example: 0.1.0 }
+        inferencia:
+          type: string
+          enum: [lista, despertando, no_disponible, sin_configurar]
+          description: |
+            lista: la inferencia respondió a /health. despertando: no respondió en ~2 s
+            (arranque en frío); la comprobación sigue en segundo plano. no_disponible: respondió
+            con error o no se pudo contactar. sin_configurar: el backend no tiene INFERENCE_URL.
+            La app solo debería considerar "conectado" con `lista`.
 
     PublicConfig:
       type: object
@@ -234,12 +311,20 @@ components:
             ESTRICTAMENTE MAYOR que este valor (misma regla en la app y en la demo).
             0 = elimina cualquier solapamiento; 1 = no elimina ninguna.
         max_detections: { type: integer, minimum: 3, maximum: 100, default: 100 }
-        request_timeout_s: { type: integer, minimum: 5, maximum: 120, default: 60 }
-        retries: { type: integer, minimum: 0, maximum: 5, default: 0 }
+        request_timeout_s:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 60
+          description: |
+            Espera máxima de la app a /predict (s). El backend espera a la inferencia
+            request_timeout_s − 3 (tope INFERENCE_TIMEOUT_S) para responder antes que la app;
+            la demo web usa el mismo valor. El servicio de inferencia corta a los 120 s.
+        retries: { type: integer, minimum: 0, maximum: 5, default: 0, description: "Reintentos de la app ante fallo de red (no ante errores HTTP)." }
         demo_enabled: { type: boolean, default: false, description: "Demo web pública /demo (el backend la bloquea si es false)" }
 
     # --- Esquema de respuesta de inferencia (servicio `inference`, POST /predict).
-    # Se reutilizará tal cual en POST /api/v1/predict (Fase 4).
+    # POST /api/v1/predict la devuelve tal cual.
     Deteccion:
       type: object
       required: [categoria, clase_id, confianza, bbox_norm, bbox_px]
