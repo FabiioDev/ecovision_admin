@@ -278,7 +278,10 @@ components:
           default: ""
           description: |
             Texto plano de un bloque de anuncio (noticias, enlaces a formularios, etc.).
-            La app le da formato y convierte las URL en enlaces. Vacío = el bloque no se muestra.
+            Vacío = el bloque no se muestra. Enlaces (solo https://; desde la app 1.0.1):
+              - `[texto](https://...)` muestra solo "texto" como enlace;
+              - una URL suelta se muestra abreviada (p. ej. `github.com/…/archivo.apk`).
+            Las versiones anteriores de la app muestran el texto tal cual, con la URL entera.
         announcement_2: *announcement
         announcement_3: *announcement
         registration_enabled:

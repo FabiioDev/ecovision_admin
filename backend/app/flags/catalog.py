@@ -169,7 +169,9 @@ GROUP_UI = {
     "Distribución": ("distribucion", "download"),
 }
 
-_ANN_HELP = ("Texto que verá el usuario; puede incluir enlaces (p. ej. un formulario de opinión). "
+_ANN_HELP = ("Texto que verá el usuario; puede incluir enlaces https:// (p. ej. un formulario de "
+             "opinión). Para mostrar un texto en lugar de la dirección: [Danos tu opinión](https://...); "
+             "las direcciones sueltas se ven abreviadas (app 1.0.1 o posterior). "
              f"Máx. {ANNOUNCEMENT_MAX_LEN} caracteres. Vacío = el bloque no se muestra.")
 
 FLAG_SPECS: list[FlagSpec] = [
