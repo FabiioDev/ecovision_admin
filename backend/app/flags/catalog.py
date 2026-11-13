@@ -189,7 +189,8 @@ FLAG_SPECS: list[FlagSpec] = [
              depends_on="announcements_enabled", max_length=ANNOUNCEMENT_MAX_LEN),
 
     FlagSpec("registration_enabled", "Registro de usuarios",
-             "Permite crear cuentas nuevas desde la app (Fase 3).", GROUPS[2], "bool"),
+             "Apagado, la app oculta \"Regístrate\" (también antes del login) y no deja "
+             "crear cuentas nuevas con Google.", GROUPS[2], "bool"),
 
     FlagSpec("maintenance_mode", "Modo mantenimiento",
              "La app muestra el mensaje de mantenimiento y bloquea su uso.", GROUPS[3], "bool"),

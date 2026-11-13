@@ -36,6 +36,7 @@ class PublicConfig(BaseModel):
     config_version: int
     maintenance_mode: bool
     maintenance_message: str
+    registration_enabled: bool
     min_app_version: str
 
 
@@ -74,7 +75,9 @@ def config_public(response: Response):
     response.headers["Cache-Control"] = "no-cache"
     c = snap.config
     return PublicConfig(config_version=snap.version, maintenance_mode=c.maintenance_mode,
-                        maintenance_message=c.maintenance_message, min_app_version=c.min_app_version)
+                        maintenance_message=c.maintenance_message,
+                        registration_enabled=c.registration_enabled,
+                        min_app_version=c.min_app_version)
 
 
 @router.get("/config", response_model=ConfigResponse, dependencies=[Depends(_config_auth)],

@@ -52,10 +52,11 @@ paths:
   /api/v1/config/public:
     get:
       tags: [app]
-      summary: Config mínima pública (mantenimiento y versión mínima)
+      summary: Config mínima pública (mantenimiento, registro y versión mínima)
       description: |
         Sin autenticación. Pensada para consultarse antes del login: permite mostrar el
-        mensaje de mantenimiento o exigir actualización aunque el usuario no tenga sesión.
+        mensaje de mantenimiento, ocultar "Regístrate" si el registro está cerrado o exigir
+        actualización aunque el usuario no tenga sesión (GET /api/v1/config exige token).
       operationId: getPublicConfig
       security: []
       responses:
@@ -226,11 +227,16 @@ components:
 
     PublicConfig:
       type: object
-      required: [config_version, maintenance_mode, maintenance_message, min_app_version]
+      required: [config_version, maintenance_mode, maintenance_message, registration_enabled, min_app_version]
       properties:
         config_version: { type: integer, minimum: 0 }
         maintenance_mode: { type: boolean }
         maintenance_message: { type: string }
+        registration_enabled:
+          type: boolean
+          description: |
+            false = la app oculta "Regístrate" y deshace las cuentas nuevas de Google. Solo
+            es una flag de la app: el registro lo hace Firebase desde el teléfono (regla 5).
         min_app_version: { type: string }
 
     ConfigResponse:

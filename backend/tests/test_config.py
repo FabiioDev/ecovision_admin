@@ -74,4 +74,10 @@ def test_config_publica_sin_token(client, monkeypatch):
     r = client.get("/api/v1/config/public")
     assert r.status_code == 200
     assert r.json() == {"config_version": 3, "maintenance_mode": True,
-                        "maintenance_message": "Pronto", "min_app_version": "1.0"}
+                        "maintenance_message": "Pronto", "registration_enabled": True,
+                        "min_app_version": "1.0"}
+
+
+def test_config_publica_con_el_registro_cerrado(client, monkeypatch):
+    usar_config(monkeypatch, registration_enabled=False)
+    assert client.get("/api/v1/config/public").json()["registration_enabled"] is False
