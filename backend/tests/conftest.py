@@ -28,6 +28,8 @@ os.environ.update({
     "PREDICT_RATE_WINDOW_S": "60",
     "DEMO_MAX_UPLOAD_MB": "1",
     "DEMO_RATE_LIMIT": "50",
+    "DOWNLOAD_RATE_LIMIT": "2",
+    "DOWNLOAD_RATE_WINDOW_S": "600",
 })
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -76,7 +78,9 @@ def _sin_gcp(monkeypatch):
     # Los limitadores son de módulo: cada prueba empieza sin peticiones contadas
     from app.api import routes
     from app.demo import routes as demo_routes
-    for limitador in (routes._por_usuario, demo_routes._by_ip, demo_routes._global):
+    from app.descarga import routes as descarga_routes
+    for limitador in (routes._por_usuario, demo_routes._by_ip, demo_routes._global,
+                      descarga_routes._por_ip):
         limitador._events.clear()
     yield
     inference._reiniciar_estado()
