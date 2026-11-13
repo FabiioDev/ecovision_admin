@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Descarga la app de EcoVision SV para Android.">
+  <title>Descargar la app · EcoVision SV</title>
+  <link rel="preload" href="/descargar/assets/fonts/BeVietnamPro-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/descargar/assets/css/ecovision.css">
+  <link rel="stylesheet" href="/descargar/static/descarga.css">
+</head>
+<body>
+{# Página aislada del panel: sin enlaces a /admin y sin JavaScript. #}
+<header class="dl-top">
+  <div class="dl-top-inner">
+    <span class="brand">EcoVision SV <span class="pill pill-blue">Android</span></span>
+  </div>
+</header>
+
+<main class="dl-main">
+  <section class="dl-hero">
+    <div class="section-label">Clasificación de residuos con IA</div>
+    <h1 class="headline-lg">Descarga EcoVision SV</h1>
+    <p class="body-lg">Toma una foto de un residuo y la app te dice a qué categoría pertenece y cómo
+      reciclarlo. Necesitas una cuenta (correo o Google) y conexión a internet para detectar.</p>
+  </section>
+
+  {% if aviso %}
+  <div class="alert alert-warn dl-aviso" role="alert">{{ aviso }}</div>
+  {% endif %}
+
+  {% if motivo %}
+  <section class="card dl-card">
+    <h2 class="title-lg">Descarga no disponible</h2>
+    <p>{{ motivo }}</p>
+  </section>
+  {% else %}
+  <section class="card dl-card">
+    <div class="dl-version">
+      <h2 class="title-lg">App para Android</h2>
+      {% if version %}<span class="pill pill-neutral">Versión {{ version }}</span>{% endif %}
+    </div>
+    <p class="muted">Requiere Android 7.0 o superior. El archivo se descarga desde GitHub.</p>
+    <a class="btn btn-primary dl-boton" href="/descargar/apk" rel="nofollow">Descargar APK</a>
+    {% if mantenimiento %}
+    <p class="alert alert-info dl-mant">{{ mensaje_mantenimiento }} Puedes instalar la app; la detección
+      volverá a funcionar al terminar el mantenimiento.</p>
+    {% endif %}
+    {% if sha256 %}
+    <details class="dl-sha">
+      <summary>Comprobar el archivo (SHA-256)</summary>
+      <code>{{ sha256 }}</code>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="dl-pasos">
+    <h2 class="title-lg">Cómo instalarla</h2>
+    <ol>
+      <li>Pulsa <strong>Descargar APK</strong> y abre el archivo cuando termine.</li>
+      <li>Si Android lo pide, permite <strong>instalar apps de origen desconocido</strong> para tu
+        navegador o tu gestor de archivos.</li>
+      <li>Si aparece <strong>Google Play Protect</strong>, elige <strong>Más detalles → Instalar de
+        todas formas</strong>: la app no está en Google Play, por eso avisa.</li>
+      <li>Abre EcoVision SV, crea tu cuenta o inicia sesión, y prueba con una foto.</li>
+    </ol>
+    <p class="muted">Para actualizar, descarga la versión nueva desde esta página e instálala encima:
+      tu historial se conserva.</p>
+  </section>
+  {% endif %}
+</main>
+
+<footer class="dl-foot muted">EcoVision SV · Proyecto universitario</footer>
+</body>
+</html>

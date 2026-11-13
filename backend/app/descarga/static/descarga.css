@@ -1,0 +1,33 @@
+/* Página de descarga del APK. Tokens y componentes base en /descargar/assets/css/ecovision.css
+   (los mismos del panel y la demo, según DESIGN.md). Sin iconos ni JavaScript. */
+
+body { min-height: 100vh; display: flex; flex-direction: column; }
+
+.dl-top { background: var(--surface); border-bottom: 1px solid var(--outline-variant-60); }
+.dl-top-inner { max-width: 760px; margin: 0 auto; height: 64px; padding: 0 24px; display: flex; align-items: center; }
+.dl-top .brand { gap: 10px; }
+
+.dl-main { width: 100%; max-width: 760px; margin: 0 auto; padding: 32px 24px 48px; flex: 1; }
+.dl-hero { margin-bottom: 24px; }
+.dl-hero .section-label { margin: 0 0 8px; color: var(--primary); }
+.dl-hero p { margin: 12px 0 0; }
+
+.dl-aviso { margin-bottom: 16px; }
+.dl-card { margin-bottom: 24px; }
+.dl-card h2 { margin: 0; }
+.dl-version { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.dl-boton { margin-top: 8px; }
+.dl-mant { margin: 16px 0 0; }
+.dl-sha { margin-top: 16px; }
+.dl-sha summary { cursor: pointer; color: var(--on-surface-variant); }
+.dl-sha code { display: block; margin-top: 8px; word-break: break-all; font-size: 13px; }
+
+.dl-pasos h2 { margin-bottom: 8px; }
+.dl-pasos ol { padding-left: 20px; line-height: 1.6; }
+.dl-pasos li + li { margin-top: 6px; }
+
+.dl-foot { text-align: center; padding: 24px; }
+
+@media (max-width: 600px) {
+  .dl-boton { width: 100%; justify-content: center; }
+}
