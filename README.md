@@ -12,6 +12,10 @@ EfficientDet D1). Se despliega en Google Cloud Run y reúne:
   Firebase Authentication.
 - **Demo web** (`/demo`): prueba pública sin registro (tomar o subir una foto y ver las
   detecciones). Apagada por defecto con la flag `demo_enabled`.
+- **Descarga del APK** (`/descargar`): página pública con la versión, el SHA-256 y las
+  instrucciones de instalación; `/descargar/apk` redirige al archivo en GitHub Releases.
+  Apagada por defecto con la flag `download_enabled`; la versión, el enlace y el SHA-256 se
+  editan en el panel (grupo "Distribución").
 
 El backend **no ejecuta el modelo**: reenvía la imagen al servicio de inferencia, que se
 versiona y despliega por separado (no forma parte de este repositorio).
@@ -26,6 +30,7 @@ backend/
 │   ├── api/           /api/v1
 │   ├── admin/         /admin (sesión por cookie, CSRF, roles)
 │   ├── demo/          /demo (plantilla, JS y CSS propios)
+│   ├── descarga/      /descargar (plantilla y CSS propios, sin JavaScript)
 │   ├── flags/         catálogo de flags (catalog.py)
 │   ├── services/      Firestore, config versionada, auditoría, usuarios, inferencia
 │   ├── templates/     plantillas Jinja2 del panel
@@ -105,8 +110,20 @@ Todas están descritas en `backend/.env.example`. Las principales:
 | `INFERENCE_TIMEOUT_S` | Tope de espera a la inferencia (115). La espera real es `request_timeout_s − 3` (flag del panel), para responder antes que la app. |
 | `PREDICT_*` | Tamaño máximo de imagen y límite de detecciones por usuario de `/api/v1/predict`. |
 | `DEMO_*` | Tamaño máximo y límites de peticiones de la demo. |
+| `DOWNLOAD_RATE_*` | Límite por IP de `/descargar/apk`. |
 
 Nunca se commitean `.env`, claves ni JSON de cuentas de servicio.
+
+## Publicar una versión del APK
+
+1. Generar y firmar el APK en el repo de la app (`./gradlew assembleRelease`).
+2. Crear el release en GitHub con el APK adjunto (p. ej. `gh release create v1.0.0 EcoVisionSV-1.0.0.apk`).
+3. En el panel, grupo "Distribución": versión, enlace de descarga del release y SHA-256
+   (`certutil -hashfile EcoVisionSV-1.0.0.apk SHA256` en Windows); activar `download_enabled`.
+4. Opcional: un anuncio en la app con el enlace `https://<backend>/descargar`.
+
+El archivo de GitHub es público: apagar `download_enabled` quita el enlace del backend, pero
+no impide descargarlo a quien ya tenga la URL de GitHub.
 
 ## Despliegue en Cloud Run
 

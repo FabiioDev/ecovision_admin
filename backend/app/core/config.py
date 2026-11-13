@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # Tope global por instancia y hora: limita el gasto aunque lleguen muchas IP distintas
     demo_hourly_limit: int = Field(300, ge=1)
 
+    # --- Descarga del APK (/descargar). Además debe activarse la flag download_enabled ---
+    # Redirecciones a GitHub por IP en la ventana (segundos)
+    download_rate_limit: int = Field(10, ge=1)
+    download_rate_window_s: int = Field(600, ge=10)
+
     @property
     def api_enabled(self) -> bool:
         return self.role in ("all", "api")

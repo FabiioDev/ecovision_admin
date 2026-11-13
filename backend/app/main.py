@@ -2,8 +2,8 @@
 
 ROLE=all|api|admin decide qué routers se montan, para poder desplegar la misma
 imagen como servicio de API y como servicio de panel por separado:
-  all    /api/v1 + /demo + /admin
-  api    /api/v1 + /demo   (públicos)
+  all    /api/v1 + /demo + /descargar + /admin
+  api    /api/v1 + /demo + /descargar   (públicos)
   admin  /admin
 
   local:     uvicorn app.main:app --reload --port 8081      (desde backend/)
@@ -23,6 +23,7 @@ from .core.config import get_settings
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"          # compartido: css, fuentes, iconos
 DEMO_STATIC_DIR = Path(__file__).resolve().parent / "demo" / "static"
+DESCARGA_STATIC_DIR = Path(__file__).resolve().parent / "descarga" / "static"
 
 # Cabeceras para el panel (HTML). La API devuelve JSON y no las necesita todas.
 _ADMIN_HEADERS = {
@@ -45,6 +46,17 @@ _DEMO_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(self), microphone=(), geolocation=()",
+}
+
+# Descarga del APK: página estática sin JavaScript
+_DESCARGA_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; "
+        "form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
 
 
@@ -83,6 +95,9 @@ def create_app() -> FastAPI:
             if path in ("/demo", "/demo/"):
                 # La página depende de las flags (demo_enabled, mantenimiento)
                 response.headers.setdefault("Cache-Control", "no-cache")
+        elif path == "/descargar" or path.startswith("/descargar/"):
+            for k, v in _DESCARGA_HEADERS.items():
+                response.headers.setdefault(k, v)
         if settings.cookie_secure:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
@@ -93,6 +108,7 @@ def create_app() -> FastAPI:
 
     if settings.demo_mounted:
         _mount_demo(app)
+        _mount_descarga(app)
 
     if settings.admin_enabled:
         if len(settings.secret_key) < 32:
@@ -117,6 +133,16 @@ def _mount_demo(app: FastAPI) -> None:
     app.mount("/demo/assets/css", StaticFiles(directory=str(STATIC_DIR / "css")), name="demo_css")
     app.mount("/demo/assets/fonts", StaticFiles(directory=str(STATIC_DIR / "fonts")), name="demo_fonts")
     app.include_router(demo_router)
+
+
+def _mount_descarga(app: FastAPI) -> None:
+    """Página de descarga del APK, aislada del panel igual que la demo."""
+    from .descarga.routes import router as descarga_router
+
+    app.mount("/descargar/static", StaticFiles(directory=str(DESCARGA_STATIC_DIR)), name="descarga_static")
+    app.mount("/descargar/assets/css", StaticFiles(directory=str(STATIC_DIR / "css")), name="descarga_css")
+    app.mount("/descargar/assets/fonts", StaticFiles(directory=str(STATIC_DIR / "fonts")), name="descarga_fonts")
+    app.include_router(descarga_router)
 
 
 def _mount_admin(app: FastAPI) -> None:

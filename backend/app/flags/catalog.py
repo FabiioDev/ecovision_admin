@@ -30,6 +30,13 @@ ANNOUNCEMENT_SLOTS = 3          # bloques de anuncios configurables desde el pan
 ANNOUNCEMENT_MAX_LEN = 500
 SCORE_THRESHOLD_MIN = 0.3       # mínimo del umbral de confianza (panel, API y demo)
 
+# Distribución del APK: solo enlaces de descarga de GitHub Releases (/descargar/apk redirige
+# ahí; así no puede convertirse en una redirección abierta a cualquier sitio)
+APK_URL_PATTERN = (r"^$|^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+                   r"/releases/download/[^\s?#]+\.apk$")
+APK_URL_MAX_LEN = 300
+SHA256_PATTERN = r"^$|^[0-9a-f]{64}$"
+
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -81,6 +88,13 @@ class AppConfig(BaseModel):
     # --- Web. false hasta que el admin la active: expone inferencia pública ---
     demo_enabled: bool = False
 
+    # --- Distribución del APK (página /descargar del backend; la app las ignora) ---
+    # false hasta que el admin publique un APK. El archivo vive en GitHub Releases.
+    download_enabled: bool = False
+    apk_version: str = Field("", pattern=r"^$|^\d+(\.\d+){0,3}$", max_length=20)
+    apk_url: str = Field("", pattern=APK_URL_PATTERN, max_length=APK_URL_MAX_LEN)
+    apk_sha256: str = Field("", pattern=SHA256_PATTERN)
+
     @field_validator("announcement_1", "announcement_2", "announcement_3", "maintenance_message")
     @classmethod
     def _strip(cls, v: str) -> str:
@@ -122,7 +136,7 @@ class FlagSpec:
     label: str
     help: str
     group: str
-    kind: str  # bool | textarea | float | int | version
+    kind: str  # bool | textarea | float | int | version | url | sha256
     min: Optional[float] = None
     max: Optional[float] = None
     step: Optional[float] = None
@@ -140,6 +154,7 @@ GROUPS = [
     "Detección",
     "Red",
     "Web",
+    "Distribución",
 ]
 
 # Ancla e icono (Material Symbols, ver static/img/icons.svg) de cada grupo en el panel
@@ -151,9 +166,12 @@ GROUP_UI = {
     "Detección": ("deteccion", "center_focus_strong"),
     "Red": ("red", "wifi"),
     "Web": ("web", "public"),
+    "Distribución": ("distribucion", "download"),
 }
 
-_ANN_HELP = ("Texto que verá el usuario; puede incluir enlaces (p. ej. un formulario de opinión). "
+_ANN_HELP = ("Texto que verá el usuario; puede incluir enlaces https:// (p. ej. un formulario de "
+             "opinión). Para mostrar un texto en lugar de la dirección: [Danos tu opinión](https://...); "
+             "las direcciones sueltas se ven abreviadas (app 1.0.1 o posterior). "
              f"Máx. {ANNOUNCEMENT_MAX_LEN} caracteres. Vacío = el bloque no se muestra.")
 
 FLAG_SPECS: list[FlagSpec] = [
@@ -217,6 +235,21 @@ FLAG_SPECS: list[FlagSpec] = [
 
     FlagSpec("demo_enabled", "Demo web",
              "Página pública /demo para probar el modelo sin registro.", GROUPS[6], "bool"),
+
+    FlagSpec("download_enabled", "Descarga del APK",
+             "Página pública /descargar con el enlace al APK. El archivo está en GitHub "
+             "Releases: apagarla quita el enlace, pero no borra el archivo de GitHub.",
+             GROUPS[7], "bool"),
+    FlagSpec("apk_version", "Versión publicada",
+             "versionName del APK, p. ej. 1.0.0 (se muestra en /descargar).",
+             GROUPS[7], "version", depends_on="download_enabled"),
+    FlagSpec("apk_url", "Enlace del APK",
+             "Enlace de descarga del release en GitHub, p. ej. https://github.com/<usuario>/"
+             "EcoVision_SV/releases/download/v1.0.0/EcoVisionSV-1.0.0.apk. Vacío = sin APK.",
+             GROUPS[7], "url", depends_on="download_enabled", max_length=APK_URL_MAX_LEN),
+    FlagSpec("apk_sha256", "SHA-256 del APK",
+             "Huella para comprobar el archivo (64 caracteres hexadecimales). Opcional.",
+             GROUPS[7], "sha256", depends_on="download_enabled", max_length=64),
 ]
 
 SPECS_BY_KEY = {s.key: s for s in FLAG_SPECS}
@@ -241,6 +274,11 @@ def _error_es(spec: Optional[FlagSpec], err: Mapping[str, Any]) -> str:
     etype, ctx = err.get("type", ""), err.get("ctx") or {}
     if etype == "string_pattern_mismatch" and spec and spec.kind == "version":
         return "Formato no válido: usa números separados por puntos, p. ej. 1.0 o 1.2.3."
+    if etype == "string_pattern_mismatch" and spec and spec.kind == "url":
+        return ("Debe ser un enlace de descarga de GitHub Releases que termine en .apk "
+                "(https://github.com/<usuario>/<repo>/releases/download/...).")
+    if etype == "string_pattern_mismatch" and spec and spec.kind == "sha256":
+        return "Deben ser 64 caracteres hexadecimales en minúsculas."
     if etype == "greater_than_equal":
         return f"Debe ser mayor o igual que {_num(ctx.get('ge'))}."
     if etype == "less_than_equal":
