@@ -191,3 +191,35 @@ def test_health_endpoint_503_when_no_database(rep, client):
     kill(primary(rep))
     kill(replica(rep))
     assert client.get("/api/v1/health/databases").status_code == 503
+
+
+def test_stale_database_clears_when_resynced_by_another_process(rep):
+    """Cloud Run starves background threads: a copy made by the manual command
+    must also bring the database back into reads."""
+    admins.create("ana", "contrasena-larga-1", "lector")
+    node = replica(rep)
+    node.lock.acquire()  # the instance's own resync thread never gets to run
+    try:
+        rep._set_stale(node)
+        time.sleep(0.05)
+        replication.resync(primary(rep).client, node.client)  # the manual command
+        time.sleep(1.1)
+        admins.get("ana")
+        assert not node.stale
+    finally:
+        node.lock.release()
+
+
+def test_stale_database_stays_stale_without_a_new_copy(rep):
+    """Counter-proof: an old copy (before it became stale) does not clear it."""
+    replication.resync(primary(rep).client, replica(rep).client)
+    node = replica(rep)
+    node.lock.acquire()
+    try:
+        time.sleep(0.05)
+        rep._set_stale(node)
+        time.sleep(1.1)
+        admins.get("x-no-existe")
+        assert node.stale
+    finally:
+        node.lock.release()

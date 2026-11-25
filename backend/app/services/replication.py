@@ -20,6 +20,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from google.api_core import exceptions as gexc
@@ -106,6 +107,7 @@ class Node:
     down_until: float = 0.0
     last_error: str = ""
     stale: bool = False  # came back empty: excluded from reads until resynced
+    stale_since: Optional[datetime] = None
     writes_ok: int = 0
     writes_failed: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -264,10 +266,35 @@ class Replicator:
             for node in waiting:
                 self._recover(node)
             for node in stale:
-                if not node.down_until:
-                    self._start_resync(node)
+                if node.down_until:
+                    continue
+                if self._resynced_elsewhere(node):
+                    continue
+                self._start_resync(node)
         finally:
             self._recover_lock.release()
+
+    @staticmethod
+    def _set_stale(node: Node) -> None:
+        node.stale = True
+        node.stale_since = datetime.now(timezone.utc)
+
+    def _resynced_elsewhere(self, node: Node) -> bool:
+        """A full copy finished by another process (the manual command or another
+        instance) also clears the stale flag. Needed on Cloud Run, where a
+        background thread only gets CPU while a request is being served."""
+        try:
+            snap = node.client.document(MARKER).get()
+        except Exception as exc:  # noqa: BLE001
+            node.mark_down(exc, self.retry_s)
+            return True
+        done = snap.get("resynced_at") if snap.exists and "resynced_at" in (snap.to_dict() or {}) else None
+        if done and node.stale_since and done >= node.stale_since:
+            node.stale = False
+            node.last_error = ""
+            log.info("database %s was resynced by another process", node.database)
+            return True
+        return False
 
     def _recover(self, node: Node) -> None:
         try:
@@ -277,7 +304,7 @@ class Replicator:
             return
         if not has_marker:
             log.warning("database %s came back empty: full copy needed", node.database)
-            node.stale = True
+            self._set_stale(node)
             node.down_until = 0.0
             self._start_resync(node)
             return
@@ -365,7 +392,7 @@ class Replicator:
                 has[primary.name] = True
         for n in self.nodes:
             if has.get(n.name) is False:
-                n.stale = True
+                self._set_stale(n)
                 self._start_resync(n)
 
 
