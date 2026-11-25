@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..core.security import hash_password
-from .firestore import ADMINS, get_db, utcnow
+from .firestore import ADMINS, utcnow
+from .replication import get_replicator, op_create, op_update
 
 ROLES = ("lector", "editor", "superadmin")
 ROLE_LEVEL = {r: i for i, r in enumerate(ROLES)}
@@ -35,7 +36,7 @@ def get(username: str) -> Optional[Admin]:
     username = normalize(username)
     if not USERNAME_RE.match(username):
         return None
-    doc = get_db().collection(ADMINS).document(username).get()
+    doc = get_replicator().read(lambda db: db.collection(ADMINS).document(username).get())
     if not doc.exists:
         return None
     d = doc.to_dict()
@@ -49,24 +50,24 @@ def create(username: str, password: str, role: str) -> None:
         raise ValueError("usuario inválido: 3–40 caracteres a-z 0-9 . _ -")
     if role not in ROLES:
         raise ValueError(f"rol inválido; usa uno de {ROLES}")
-    get_db().collection(ADMINS).document(username).create({
+    get_replicator().write(op_create(f"{ADMINS}/{username}", {
         "username": username,
         "password_hash": hash_password(password),
         "role": role,
         "active": True,
         "created_at": utcnow(),
         "last_login_at": None,
-    })
+    }))
 
 
 def set_password(username: str, password: str) -> None:
-    get_db().collection(ADMINS).document(normalize(username)).update(
-        {"password_hash": hash_password(password)})
+    get_replicator().write(op_update(f"{ADMINS}/{normalize(username)}",
+                                     {"password_hash": hash_password(password)}))
 
 
 def update_password_hash(username: str, password_hash: str) -> None:
-    get_db().collection(ADMINS).document(normalize(username)).update({"password_hash": password_hash})
+    get_replicator().write(op_update(f"{ADMINS}/{normalize(username)}", {"password_hash": password_hash}))
 
 
 def record_login(username: str) -> None:
-    get_db().collection(ADMINS).document(normalize(username)).update({"last_login_at": utcnow()})
+    get_replicator().write(op_update(f"{ADMINS}/{normalize(username)}", {"last_login_at": utcnow()}))

@@ -12,7 +12,8 @@ from typing import Optional
 from firebase_admin import auth
 
 from ..core.firebase import get_firebase_app
-from .firestore import USERS, get_db, utcnow
+from .firestore import USERS, utcnow
+from .replication import get_replicator, op_delete, op_set
 
 PAGE_SIZE = 50
 
@@ -96,7 +97,7 @@ def get(uid: str) -> Optional[AppUser]:
 
 
 def get_profile(uid: str) -> dict:
-    doc = get_db().collection(USERS).document(uid).get()
+    doc = get_replicator().read(lambda db: db.collection(USERS).document(uid).get())
     return doc.to_dict() if doc.exists else {}
 
 
@@ -107,12 +108,12 @@ def create(email: str, password: str, display_name: str, actor: str) -> AppUser:
                              app=get_firebase_app())
     except Exception as exc:  # noqa: BLE001
         raise _wrap(exc) from exc
-    get_db().collection(USERS).document(r.uid).set({
+    get_replicator().write(op_set(f"{USERS}/{r.uid}", {
         "email": r.email,
         "display_name": r.display_name,
         "created_at": utcnow(),
         "created_by": f"admin:{actor}",
-    }, merge=True)
+    }, merge=True))
     return _to_user(r)
 
 
@@ -124,8 +125,9 @@ def update(uid: str, email: str, display_name: str) -> AppUser:
         r = auth.update_user(uid, app=get_firebase_app(), **kwargs)
     except Exception as exc:  # noqa: BLE001
         raise _wrap(exc) from exc
-    get_db().collection(USERS).document(uid).set(
-        {"email": r.email, "display_name": r.display_name, "updated_at": utcnow()}, merge=True)
+    get_replicator().write(op_set(
+        f"{USERS}/{uid}", {"email": r.email, "display_name": r.display_name, "updated_at": utcnow()},
+        merge=True))
     return _to_user(r)
 
 
@@ -155,6 +157,6 @@ def delete(uid: str) -> None:
         pass  # ya no existe en Auth: se limpia igualmente el perfil
     except Exception as exc:  # noqa: BLE001
         raise _wrap(exc) from exc
-    get_db().collection(USERS).document(uid).delete()
+    get_replicator().write(op_delete(f"{USERS}/{uid}"))
     # FUTURO (Fase 5): borrar también sus imágenes en Cloud Storage
     # (users/{uid}/...) y sus metadatos en la colección `images`.

@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     # Proyecto de GCP/Firebase. En Cloud Run se puede omitir (se detecta por ADC).
     google_cloud_project: Optional[str] = None
 
+    # Firestore databases. Every write goes to the primary AND the replica (double write);
+    # reads use the primary and fall back to the replica. Empty replica = single database.
+    firestore_database: str = "(default)"
+    firestore_replica_database: str = ""
+    # Seconds a failed database stays out of rotation before it is probed again.
+    firestore_retry_s: int = Field(15, ge=1)
+
     # Firma de la cookie de sesión del panel. Obligatoria si se monta el panel.
     secret_key: str = ""
 

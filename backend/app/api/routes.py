@@ -69,6 +69,27 @@ async def health(response: Response):
                   inferencia=await inference.estado())
 
 
+@router.get("/health/databases")
+def health_databases(response: Response):
+    """State of each Firestore database (double write): activa, caida o sincronizando,
+    plus writes accepted/failed by this instance and queued writes. No data is exposed."""
+    from ..services.replication import get_replicator
+
+    response.headers["Cache-Control"] = "no-store"
+    rep = get_replicator()
+    try:  # any read triggers the recovery probes
+        rep.read(lambda db: db.document("_replication_meta/marker").get())
+    except Exception:  # noqa: BLE001 - reported below as 503
+        pass
+    dbs = rep.status()
+    for d in dbs:
+        if d["state"] == "activa":
+            d.pop("last_error", None)
+    ok = any(d["state"] == "activa" for d in dbs)
+    response.status_code = 200 if ok else 503
+    return {"status": "ok" if ok else "sin_base", "databases": dbs}
+
+
 @router.get("/config/public", response_model=PublicConfig)
 def config_public(response: Response):
     snap = _snapshot()
