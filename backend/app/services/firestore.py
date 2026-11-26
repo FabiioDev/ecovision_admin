@@ -19,6 +19,8 @@ _lock = threading.Lock()
 
 
 def get_db() -> firestore.Client:
+    """Client of the PRIMARY database only. Services use `replication` instead,
+    which writes to both databases and falls back on reads."""
     global _client
     with _lock:
         if _client is None:

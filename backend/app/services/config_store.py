@@ -18,7 +18,10 @@ from typing import Optional
 from google.cloud import firestore
 
 from ..flags.catalog import CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, AppConfig
-from .firestore import APP_CONFIG, APP_CONFIG_CURRENT, APP_CONFIG_VERSIONS, get_db, utcnow
+from .firestore import APP_CONFIG, APP_CONFIG_CURRENT, APP_CONFIG_VERSIONS, utcnow
+from .replication import get_replicator, op_set
+
+CURRENT_PATH = f"{APP_CONFIG}/{APP_CONFIG_CURRENT}"
 
 
 @dataclass
@@ -29,12 +32,12 @@ class ConfigSnapshot:
     updated_by: Optional[str]
 
 
-def _current_ref():
-    return get_db().collection(APP_CONFIG).document(APP_CONFIG_CURRENT)
+def _current_ref(db):
+    return db.collection(APP_CONFIG).document(APP_CONFIG_CURRENT)
 
 
-def _versions_ref():
-    return _current_ref().collection(APP_CONFIG_VERSIONS)
+def _versions_ref(db):
+    return _current_ref(db).collection(APP_CONFIG_VERSIONS)
 
 
 def _snapshot_from(data: Optional[dict]) -> ConfigSnapshot:
@@ -49,7 +52,7 @@ def _snapshot_from(data: Optional[dict]) -> ConfigSnapshot:
 
 
 def get_current() -> ConfigSnapshot:
-    doc = _current_ref().get()
+    doc = get_replicator().read(lambda db: _current_ref(db).get())
     return _snapshot_from(doc.to_dict() if doc.exists else None)
 
 
@@ -88,35 +91,36 @@ def invalidate_cache() -> None:
 # ---- escrituras ---- #
 def save(new_config: AppConfig, actor: str, action: str, note: str = "") -> tuple[ConfigSnapshot, AppConfig]:
     """Guarda una versión nueva en una transacción. Devuelve (nuevo, config anterior)."""
-    db = get_db()
-    cur_ref = _current_ref()
     payload = new_config.model_dump(mode="json")
 
-    @firestore.transactional
-    def _apply(tx: firestore.Transaction):
-        snap = cur_ref.get(transaction=tx)
+    def _apply(db, tx: firestore.Transaction):
+        # The version number is decided in ONE database (inside its transaction)
+        # and the same two documents are then copied to the other one.
+        snap = _current_ref(db).get(transaction=tx)
         prev = _snapshot_from(snap.to_dict() if snap.exists else None)
         version = prev.version + 1
         now = utcnow()
-        tx.set(cur_ref, {
-            "config": payload,
-            "version": version,
-            "schema": CONFIG_SCHEMA_VERSION,
-            "updated_at": now,
-            "updated_by": actor,
-        })
-        tx.set(_versions_ref().document(f"{version:06d}"), {
-            "config": payload,
-            "version": version,
-            "schema": CONFIG_SCHEMA_VERSION,
-            "created_at": now,
-            "created_by": actor,
-            "action": action,
-            "note": note[:200],
-        })
-        return ConfigSnapshot(new_config, version, now, actor), prev.config
+        ops = [
+            op_set(CURRENT_PATH, {
+                "config": payload,
+                "version": version,
+                "schema": CONFIG_SCHEMA_VERSION,
+                "updated_at": now,
+                "updated_by": actor,
+            }),
+            op_set(f"{CURRENT_PATH}/{APP_CONFIG_VERSIONS}/{version:06d}", {
+                "config": payload,
+                "version": version,
+                "schema": CONFIG_SCHEMA_VERSION,
+                "created_at": now,
+                "created_by": actor,
+                "action": action,
+                "note": note[:200],
+            }),
+        ]
+        return (ConfigSnapshot(new_config, version, now, actor), prev.config), ops
 
-    result = _apply(db.transaction())
+    result = get_replicator().transaction(_apply)
     invalidate_cache()
     return result
 
@@ -126,7 +130,7 @@ def reset_defaults(actor: str) -> tuple[ConfigSnapshot, AppConfig]:
 
 
 def get_version(version: int) -> Optional[dict]:
-    doc = _versions_ref().document(f"{version:06d}").get()
+    doc = get_replicator().read(lambda db: _versions_ref(db).document(f"{version:06d}").get())
     return doc.to_dict() if doc.exists else None
 
 
@@ -139,5 +143,8 @@ def rollback(version: int, actor: str) -> Optional[tuple[ConfigSnapshot, AppConf
 
 
 def list_versions(limit: int = 20) -> list[dict]:
-    query = _versions_ref().order_by("version", direction=firestore.Query.DESCENDING).limit(limit)
-    return [d.to_dict() for d in query.stream()]
+    def _list(db):
+        query = _versions_ref(db).order_by("version", direction=firestore.Query.DESCENDING).limit(limit)
+        return [d.to_dict() for d in query.stream()]
+
+    return get_replicator().read(_list)

@@ -8,7 +8,8 @@ from typing import Any, Optional
 
 from google.cloud import firestore
 
-from .firestore import AUDIT_LOG, get_db, utcnow
+from .firestore import AUDIT_LOG, utcnow
+from .replication import get_replicator, op_set
 
 log = logging.getLogger("ecovision.audit")
 
@@ -43,7 +44,10 @@ def record(actor: str, action: str, target: str = "", details: Optional[dict[str
         "ip": ip,
     }
     try:
-        get_db().collection(AUDIT_LOG).add(entry)
+        rep = get_replicator()
+        # same generated id in both databases
+        doc_id = rep.nodes[0].client.collection(AUDIT_LOG).document().id
+        rep.write(op_set(f"{AUDIT_LOG}/{doc_id}", entry))
     except Exception:  # noqa: BLE001
         log.exception("no se pudo escribir la auditoría: %s", {k: entry[k] for k in ("actor", "action", "target")})
 
@@ -51,13 +55,16 @@ def record(actor: str, action: str, target: str = "", details: Optional[dict[str
 def list_entries(limit: int = 50, cursor: Optional[str] = None) -> tuple[list[dict], Optional[str]]:
     """Entradas más recientes primero. `cursor` es el id del último documento de
     la página anterior. Devuelve (entradas, cursor siguiente o None)."""
-    coll = get_db().collection(AUDIT_LOG)
-    query = coll.order_by("ts", direction=firestore.Query.DESCENDING).limit(limit + 1)
-    if cursor:
-        last = coll.document(cursor).get()
-        if last.exists:
-            query = query.start_after(last)
-    docs = list(query.stream())
+    def _page(db):
+        coll = db.collection(AUDIT_LOG)
+        query = coll.order_by("ts", direction=firestore.Query.DESCENDING).limit(limit + 1)
+        if cursor:
+            last = coll.document(cursor).get()
+            if last.exists:
+                query = query.start_after(last)
+        return list(query.stream())
+
+    docs = get_replicator().read(_page)
     entries = []
     for d in docs[:limit]:
         e = d.to_dict()
